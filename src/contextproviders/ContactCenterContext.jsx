@@ -368,18 +368,26 @@ export function ContactCenterProvider({ children }) {
     }));
   }, []);
 
-  const handleDisposition = useCallback(async(callUUID, disposition) =>{
-    if(!callUUID || !disposition){
-      toast.error('Missing Call UUID or Disposition');
-      return false
-    }
-    try {
-        setCurrentCall(null);
-        setIncomingCall(null);
-    } catch (error) {
-      
-    }
-  },[])
+ const handleDisposition = useCallback(async(callUUID, disposition) => {
+  if(!callUUID || !disposition){
+    toast.error('Missing Call UUID or Disposition');
+    return false
+  }
+  try {
+    //Evenytually make dispo api call here.
+    
+    setCurrentCall(null);
+    setIncomingCall(null);
+    setShouldDisposition(false);
+    
+    toast.success('Call dispositioned.');
+    return true;
+  } catch (error) {
+    console.error('Error saving disposition:', error);
+    toast.error('Failed to save disposition');
+    return false;
+  }
+},[])
 
   useEffect(() => {
   if (!pbxDetails) {
@@ -797,6 +805,7 @@ export function ContactCenterProvider({ children }) {
     applyAudioDevices,
     
     shouldDisposition,
+    handleDisposition,
     scriptData,
     matchedContacts,
     customerData,

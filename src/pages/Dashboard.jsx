@@ -4,20 +4,74 @@ import { TopBar } from "@/components/top-bar"
 import CustomerInformation from "@/components/customer-information";
 import CallScript from "@/components/call-script";
 import { Loader2, TriangleAlert } from "lucide-react"
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+
+const DISPOSITION_OPTIONS = [
+  "Sold",
+  "No Sale - Price Presentation",
+  "No Sale - No Price Presentation",
+  "Confused Caller",
+  "Follow Up"
+];
 
 function Dashboard() {
   const { user, dbUser, initError } = useAuth();
   const {
     sipState,
     sipError,
-    currentCall
-
+    currentCall,
+    shouldDisposition,
+    handleDisposition
   } = useContactCenter();
+
+  const [selectedDisposition, setSelectedDisposition] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     console.log("sipState ", sipState)
   }, [sipState])
+
+  // Reset disposition selection when dialog opens
+  useEffect(() => {
+    if (shouldDisposition) {
+      setSelectedDisposition("");
+    }
+  }, [shouldDisposition]);
+
+  const handleSubmitDisposition = async () => {
+    if (!selectedDisposition) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      // Get call UUID from currentCall or wherever it's stored
+      const callUUID = currentCall?.callUUID || currentCall?.session?.request?.callId;
+      await handleDisposition(callUUID, selectedDisposition);
+      setSelectedDisposition("");
+    } catch (error) {
+      console.error('Error submitting disposition:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   if (initError) {
     return (
@@ -76,24 +130,76 @@ function Dashboard() {
       </div>
     );
   }
+
   return (
-    <div className="flex flex-col h-screen">
-      <TopBar />
-      <div className="flex flex-1 overflow-hidden">
-        {currentCall ? (
-          <>
-            <div className="w-1/2 border-r bg-background">
-              <CallScript />
-            </div>
-            <div className="w-1/2 overflow-y-auto">
-              <CustomerInformation />
-            </div>
-          </>
-        ) : (
-          <></>
-        )}
+    <>
+      <div className="flex flex-col h-screen">
+        <TopBar />
+        <div className="flex flex-1 overflow-hidden">
+          {currentCall ? (
+            <>
+              <div className="w-1/2 border-r bg-background">
+                <CallScript />
+              </div>
+              <div className="w-1/2 overflow-y-auto">
+                <CustomerInformation />
+              </div>
+            </>
+          ) : (
+            <></>
+          )}
+        </div>
       </div>
-    </div>
+
+      <Dialog open={shouldDisposition} onOpenChange={() => {}}>
+        <DialogContent className="sm:max-w-lg" onInteractOutside={(e) => e.preventDefault()}>
+          <DialogHeader className="text-center">
+            <DialogTitle className="text-center">Call Disposition</DialogTitle>
+            <DialogDescription className="text-center">
+              Please select the outcome of this call before continuing.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex flex-col items-center py-6">
+            <div className="w-full max-w-md space-y-3">
+              <Label htmlFor="disposition" className="text-center block">Disposition</Label>
+              <Select 
+                value={selectedDisposition} 
+                onValueChange={setSelectedDisposition}
+              >
+                <SelectTrigger id="disposition" className="w-full">
+                  <SelectValue placeholder="Select a disposition" />
+                </SelectTrigger>
+                <SelectContent>
+                  {DISPOSITION_OPTIONS.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {option}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter className="sm:justify-center">
+            <Button
+              onClick={handleSubmitDisposition}
+              disabled={!selectedDisposition || isSubmitting}
+              className="w-full max-w-md"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Submitting...
+                </>
+              ) : (
+                'Submit Disposition'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
