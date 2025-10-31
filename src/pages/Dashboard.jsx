@@ -11,6 +11,8 @@ function Dashboard() {
   const {
     sipState,
     sipError,
+    currentCall
+
   } = useContactCenter();
 
   useEffect(() => {
@@ -63,8 +65,8 @@ function Dashboard() {
             <p className="text-sm text-muted-foreground mt-1">
               {sipError}
             </p>
-            <button 
-              onClick={() => window.location.reload()} 
+            <button
+              onClick={() => window.location.reload()}
               className="mt-3 px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 text-sm"
             >
               Retry
@@ -74,21 +76,22 @@ function Dashboard() {
       </div>
     );
   }
-
-  // Main dashboard when agent is logged in and connected
   return (
     <div className="flex flex-col h-screen">
       <TopBar />
       <div className="flex flex-1 overflow-hidden">
-        {/* Left side - Call Script */}
-        <div className="w-1/2 border-r bg-background">
-          <CallScript />
-        </div>
-        
-        {/* Right side - Customer Information */}
-        <div className="w-1/2 overflow-y-auto">
-          <CustomerInformation />
-        </div>
+        {currentCall ? (
+          <>
+            <div className="w-1/2 border-r bg-background">
+              <CallScript />
+            </div>
+            <div className="w-1/2 overflow-y-auto">
+              <CustomerInformation />
+            </div>
+          </>
+        ) : (
+          <></>
+        )}
       </div>
     </div>
   );
