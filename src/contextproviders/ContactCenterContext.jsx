@@ -379,7 +379,6 @@ export function ContactCenterProvider({ children }) {
     return false
   }
   try {
-    //Evenytually make dispo api call here.
     const dispoResult = await dispositionApi.execute('/call/disposition', 'POST', {callId: currentCallUUID, disposition: disposition});
 
     if(dispoResult?.success === true){
@@ -425,7 +424,8 @@ export function ContactCenterProvider({ children }) {
       setFormattedStateTime(formatTime(countdownTime));
       if (countdownTime === 0) {
         console.log('Setting Idle Status');
-        updateStatus('Idle')
+        handleDisposition('nd');
+        updateStatus('Idle');
       }
     } else {
       setFormattedStateTime(formatTime(Math.max(0, elapsedTime)));
