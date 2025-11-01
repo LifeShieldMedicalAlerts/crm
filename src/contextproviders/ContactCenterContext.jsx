@@ -11,6 +11,7 @@ export function ContactCenterProvider({ children }) {
   const campaignAPI = useApi();
   const customerApi = useApi();
   const scriptApi = useApi();
+  const dispositionApi = useApi();
   const isConfigured = useRef(false);
   const wsRef = useRef(null);
   const wsAuthenticated = useRef(false);
@@ -379,14 +380,22 @@ export function ContactCenterProvider({ children }) {
   }
   try {
     //Evenytually make dispo api call here.
-    
-    setCurrentCall(null);
-    setCurrentCallUUID(null);
-    setIncomingCall(null);
-    setShouldDisposition(false);
-    
-    toast.success('Call dispositioned.');
-    return true;
+    const dispoResult = await dispositionApi.execute('/call/disposition', 'POST', {callId: currentCallUUID, disposition: disposition});
+
+    if(dispoResult?.success === true){
+        setCurrentCall(null);
+        setCurrentCallUUID(null);
+        setIncomingCall(null);
+        setShouldDisposition(false);
+        
+        toast.success('Call dispositioned.');
+        return true;
+    }else{
+      console.error('Failed to disposition call: ', JSON.stringify(dispoResult?.data || {}));
+      toast.error('Failed to save disposition');
+      return false;
+    }
+  
   } catch (error) {
     console.error('Error saving disposition:', error);
     toast.error('Failed to save disposition');
