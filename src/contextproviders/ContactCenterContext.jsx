@@ -8,6 +8,7 @@ const ContactCenterContext = createContext();
 
 export function ContactCenterProvider({ children }) {
   const { user, dbUser, getBearerToken } = useAuth();
+  const campaignAPI = useApi();
   const customerApi = useApi();
   const scriptApi = useApi();
   const isConfigured = useRef(false);
@@ -24,8 +25,11 @@ export function ContactCenterProvider({ children }) {
   const [pbxDetails, setPBXDetails] = useState(null);
   const [wsConnected, setWsConnected] = useState(false);
 
+  const [currentCallUUID, setCurrentCallUUID] = useState(null)
+
   const [shouldDisposition, setShouldDisposition] = useState(false);
   const [scriptData, setScriptData] = useState(null);
+  const [campaignSettings, setCampaignSettings] = useState(null)
   const [matchedContacts, setMatchedContacts] = useState(null);
   const [customerData, setCustomerData] = useState()
 
@@ -368,15 +372,16 @@ export function ContactCenterProvider({ children }) {
     }));
   }, []);
 
- const handleDisposition = useCallback(async(callUUID, disposition) => {
-  if(!callUUID || !disposition){
-    toast.error('Missing Call UUID or Disposition');
+ const handleDisposition = useCallback(async(disposition) => {
+  if(!disposition){
+    toast.error('Missing Call Disposition');
     return false
   }
   try {
     //Evenytually make dispo api call here.
     
     setCurrentCall(null);
+    setCurrentCallUUID(null);
     setIncomingCall(null);
     setShouldDisposition(false);
     
@@ -387,7 +392,7 @@ export function ContactCenterProvider({ children }) {
     toast.error('Failed to save disposition');
     return false;
   }
-},[])
+},[currentCallUUID])
 
   useEffect(() => {
   if (!pbxDetails) {
@@ -554,20 +559,31 @@ export function ContactCenterProvider({ children }) {
         console.log('Caller number:', callerNumber);
         const queueName = session?.request?.getHeader('X-Queue-Name') || null;
         console.log('Queue name:', queueName);
+        const callUUID = session?.request?.getHeader('X-Call-UUID') || null;
+        setCurrentCallUUID(callUUID)
+        console.log('Call UUID:', callUUID);
 
 
 
         
         if(queueName && callerNumber){
 
-          const [scriptResult, matchResult] = await Promise.all([
+          const [scriptResult, campaignResult, matchResult] = await Promise.all([
             scriptApi.execute('/campaign/fetchscript', 'POST', {fetchFor: queueName}),
+            campaignAPI.execute('/campaign/fetchsettings', 'POST', {fetchFor: queueName}),
             customerApi.execute('/customer/match/byphone', 'POST', {number: callerNumber})
           ]);
 
           if (scriptResult?.success !== false) {
             console.log('Setting script data:', scriptResult?.data?.script_content); 
             setScriptData(scriptResult?.data?.script_content);
+          }else{
+            toast.error('Failed to fetch script data');
+          }
+
+          if (campaignResult?.success !== false) {
+            console.log('Setting campaign data:', campaignResult?.data); 
+            setCampaignSettings(campaignResult?.data);
           }else{
             toast.error('Failed to fetch script data');
           }
@@ -733,7 +749,7 @@ export function ContactCenterProvider({ children }) {
 
     try {
       await currentCall.hangup();
-      setCurrentCall(null);
+      //setCurrentCall(null);
     } catch (error) {
       console.error('Error hanging up call:', error);
       toast.error('Failed to hangup');
@@ -806,7 +822,9 @@ export function ContactCenterProvider({ children }) {
     
     shouldDisposition,
     handleDisposition,
+    currentCallUUID,
     scriptData,
+    campaignSettings,
     matchedContacts,
     customerData,
     updateCustomerData

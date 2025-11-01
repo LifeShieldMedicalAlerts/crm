@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
 import { X, Plus, CreditCard } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 const US_STATES = [
   'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
@@ -69,8 +69,7 @@ export default function CustomerInformation() {
   const {
     matchedContacts,
     customerData,
-    updateCustomerData,
-    togglePayment
+    updateCustomerData
   } = useContactCenter();
 
   const [formData, setFormData] = useState({
@@ -202,6 +201,10 @@ export default function CustomerInformation() {
     e.preventDefault();
     updateCustomerData(formData);
   };
+
+  const togglePayment = useCallback(() =>{
+
+  },[])
 
   return (
     <div className="h-full p-6">

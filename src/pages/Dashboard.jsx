@@ -4,7 +4,7 @@ import { TopBar } from "@/components/top-bar"
 import CustomerInformation from "@/components/customer-information";
 import CallScript from "@/components/call-script";
 import { Loader2, TriangleAlert } from "lucide-react"
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
@@ -23,14 +23,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 
-const DISPOSITION_OPTIONS = [
-  "Sold",
-  "No Sale - Price Presentation",
-  "No Sale - No Price Presentation",
-  "Confused Caller",
-  "Follow Up"
-];
-
 function Dashboard() {
   const { user, dbUser, initError } = useAuth();
   const {
@@ -38,7 +30,8 @@ function Dashboard() {
     sipError,
     currentCall,
     shouldDisposition,
-    handleDisposition
+    handleDisposition,
+    campaignSettings
   } = useContactCenter();
 
   const [selectedDisposition, setSelectedDisposition] = useState("");
@@ -55,7 +48,7 @@ function Dashboard() {
     }
   }, [shouldDisposition]);
 
-  const handleSubmitDisposition = async () => {
+  const handleSubmitDisposition = useCallback(async () => {
     if (!selectedDisposition) {
       return;
     }
@@ -63,15 +56,14 @@ function Dashboard() {
     setIsSubmitting(true);
     try {
       // Get call UUID from currentCall or wherever it's stored
-      const callUUID = currentCall?.callUUID || currentCall?.session?.request?.callId;
-      await handleDisposition(callUUID, selectedDisposition);
+      await handleDisposition(selectedDisposition);
       setSelectedDisposition("");
     } catch (error) {
       console.error('Error submitting disposition:', error);
     } finally {
       setIsSubmitting(false);
     }
-  };
+  },[selectedDisposition]);
 
   if (initError) {
     return (
@@ -171,9 +163,9 @@ function Dashboard() {
                   <SelectValue placeholder="Select a disposition" />
                 </SelectTrigger>
                 <SelectContent>
-                  {DISPOSITION_OPTIONS.map((option) => (
-                    <SelectItem key={option} value={option}>
-                      {option}
+                  {campaignSettings?.queue_dispositions?.map((d) => (
+                    <SelectItem key={d.value} value={d.value}>
+                      {d.friendlyName}
                     </SelectItem>
                   ))}
                 </SelectContent>
