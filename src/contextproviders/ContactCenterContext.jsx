@@ -12,6 +12,7 @@ export function ContactCenterProvider({ children }) {
   const customerApi = useApi();
   const scriptApi = useApi();
   const dispositionApi = useApi();
+  const configApi = useApi();
   const isConfigured = useRef(false);
   const wsRef = useRef(null);
   const wsAuthenticated = useRef(false);
@@ -30,6 +31,7 @@ export function ContactCenterProvider({ children }) {
 
   const [shouldDisposition, setShouldDisposition] = useState(false);
   const [scriptData, setScriptData] = useState(null);
+  const [productOfferings, setProductOfferings] = useState(null)
   const [campaignSettings, setCampaignSettings] = useState(null)
   const [matchedContacts, setMatchedContacts] = useState(null);
   const [customerData, setCustomerData] = useState()
@@ -577,12 +579,19 @@ export function ContactCenterProvider({ children }) {
         
         if(queueName && callerNumber){
 
-          const [scriptResult, campaignResult, matchResult] = await Promise.all([
+          const [configResult, scriptResult, campaignResult, matchResult] = await Promise.all([
+            configApi.execute('/config', 'POST', {}),
             scriptApi.execute('/campaign/fetchscript', 'POST', {fetchFor: queueName}),
             campaignAPI.execute('/campaign/fetchsettings', 'POST', {fetchFor: queueName}),
             customerApi.execute('/customer/match/byphone', 'POST', {number: callerNumber})
           ]);
 
+          if(configResult?.success === true){
+            console.log('Setting product offeerings:', configResult?.data); 
+              setProductOfferings(configResult?.data);
+          }else{
+            toast.error('Failed to fetch pricing information.');
+          }
           if (scriptResult?.success !== false) {
             console.log('Setting script data:', scriptResult?.data?.script_content); 
             setScriptData(scriptResult?.data?.script_content);
@@ -833,6 +842,7 @@ export function ContactCenterProvider({ children }) {
     handleDisposition,
     currentCallUUID,
     scriptData,
+    productOfferings,
     campaignSettings,
     matchedContacts,
     customerData,
