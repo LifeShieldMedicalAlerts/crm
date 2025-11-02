@@ -3,6 +3,7 @@ import { useAuth } from "@/contextproviders/AuthContext";
 import { Web } from 'sip.js';
 import { toast } from 'sonner';
 import useApi from '@/hooks/useApi';
+import { useDebounce } from '@/hooks/useDebounce';
 
 const ContactCenterContext = createContext();
 
@@ -49,6 +50,10 @@ export function ContactCenterProvider({ children }) {
   const [selectedInputDevice, setSelectedInputDevice] = useState(null);
   const [selectedOutputDevice, setSelectedOutputDevice] = useState(null);
   const [audioPermissionGranted, setAudioPermissionGranted] = useState(false);
+
+  useEffect(()=>{
+    console.log('customer data:', customerData)
+},[customerData])
 
 
   const requestAudioPermissions = useCallback(async () => {
@@ -170,8 +175,11 @@ export function ContactCenterProvider({ children }) {
   }, [currentCall]);
 
   const updateCustomerData = async ({data}) =>{
-    return true;
+    console.log('recieved data ', data);
+    const updateResult = await customerApi.execute('/customer/update', 'POST', data);
   }
+
+  const debouncedUpdate = useDebounce(updateCustomerData, 500); 
 
   const refreshAudioDevices = useCallback(async () => {
     try {
@@ -426,7 +434,9 @@ export function ContactCenterProvider({ children }) {
       setFormattedStateTime(formatTime(countdownTime));
       if (countdownTime === 0) {
         console.log('Setting Idle Status');
-        handleDisposition('nd');
+        if(shouldDisposition === true){
+            handleDisposition('nd');
+        } 
         updateStatus('Idle');
       }
     } else {
@@ -438,7 +448,7 @@ export function ContactCenterProvider({ children }) {
   const intervalId = setInterval(updateTimer, 1000);
 
   return () => clearInterval(intervalId);
-}, [pbxDetails]);
+}, [pbxDetails, shouldDisposition]);
 
   useEffect(() => {
     requestAudioPermissions();
@@ -610,14 +620,14 @@ export function ContactCenterProvider({ children }) {
             if(matchResult?.data && Array.isArray(matchResult.data)){
               if(matchResult.data.length === 0){
                   //No customer found, create fresh one
-                  const creationResult = customerApi.execute('/customer/create', 'POST', {number: callerNumber}, 2)
+                  const creationResult = await customerApi.execute('/customer/create', 'POST', {number: callerNumber}, 2)
                   if(creationResult?.success === true && creationResult?.data){
                     setCustomerData(creationResult.data);
                   }else{
                     toast.error('Failed to create new customer.');
                   }
               }else if(matchResult.data.length === 1){
-                  const pullCustomer = customerApi.execute('/customer/load', 'POST', {customerId: matchResult.data[0]?.customer_id}, 2);
+                  const pullCustomer = await customerApi.execute('/customer/load', 'POST', {customerId: matchResult.data[0]?.customer_id}, 2);
                   if(pullCustomer?.success === true && pullCustomer?.data){
                     setCustomerData(pullCustomer.data)
                   }else{
@@ -846,7 +856,8 @@ export function ContactCenterProvider({ children }) {
     campaignSettings,
     matchedContacts,
     customerData,
-    updateCustomerData
+    updateCustomerData,
+    debouncedUpdate
 
   };
 

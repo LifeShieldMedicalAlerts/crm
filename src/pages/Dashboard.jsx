@@ -126,22 +126,17 @@ function Dashboard() {
   return (
     <>
       <div className="flex flex-col h-screen">
-        <TopBar />
-        <div className="flex flex-1 overflow-hidden">
-          {currentCall ? (
-            <>
-              <div className="w-1/2 border-r bg-background">
-                <CallScript />
-              </div>
-              <div className="w-1/2 overflow-y-auto">
-                <CustomerInformation />
-              </div>
-            </>
-          ) : (
-            <></>
-          )}
-        </div>
+      <TopBar />
+      <div className="flex-1 overflow-hidden">
+        {currentCall ? (
+          <CallScript />
+        ) : (
+          <div className="h-full flex items-center justify-center">
+            <p className="text-muted-foreground">No active call</p>
+          </div>
+        )}
       </div>
+    </div>
 
       <Dialog open={shouldDisposition} onOpenChange={() => {}}>
         <DialogContent className="sm:max-w-lg" onInteractOutside={(e) => e.preventDefault()}>
