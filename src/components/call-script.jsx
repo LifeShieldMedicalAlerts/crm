@@ -190,9 +190,9 @@ export default function CallScript() {
   };
 
   const toggleCondition = (condition) => {
-    const conditions = formData.conditions.includes(condition)
-      ? formData.conditions.filter(c => c !== condition)
-      : [...formData.conditions, condition];
+    const conditions = formData?.conditions?.includes(condition)
+      ? formData?.conditions?.filter(c => c !== condition)
+      : [...formData?.conditions, condition];
     const updatedData = { ...formData, conditions };
     setFormData(updatedData);
     debouncedUpdate({ data: updatedData });
@@ -201,7 +201,7 @@ export default function CallScript() {
   const removeCondition = (condition) => {
     const updatedData = {
       ...formData,
-      conditions: formData.conditions.filter(c => c !== condition)
+      conditions: formData?.conditions?.filter(c => c !== condition)
     };
     setFormData(updatedData);
     debouncedUpdate({ data: updatedData });
@@ -598,8 +598,8 @@ const handlePlaceholders = useCallback((content) => {
               <Popover>
                 <PopoverTrigger asChild>
                   <Button variant="outline" className="w-full justify-start text-left font-normal">
-                    {formData.conditions.length > 0
-                      ? `${formData.conditions.length} condition${formData.conditions.length > 1 ? 's' : ''} selected`
+                    {formData?.conditions?.length > 0
+                      ? `${formData?.conditions?.length} condition${formData?.conditions?.length > 1 ? 's' : ''} selected`
                       : 'Select conditions'}
                   </Button>
                 </PopoverTrigger>
@@ -609,7 +609,7 @@ const handlePlaceholders = useCallback((content) => {
                       <div key={condition} className="flex items-center space-x-2">
                         <Checkbox
                           id={condition}
-                          checked={formData.conditions.includes(condition)}
+                          checked={formData?.conditions?.includes(condition)}
                           onCheckedChange={() => toggleCondition(condition)}
                         />
                         <label
@@ -624,9 +624,9 @@ const handlePlaceholders = useCallback((content) => {
                 </PopoverContent>
               </Popover>
 
-              {formData.conditions.length > 0 && (
+              {formData?.conditions?.length > 0 && (
                 <div className="flex flex-wrap gap-2">
-                  {formData.conditions.map(condition => (
+                  {formData?.conditions?.map(condition => (
                     <Badge key={condition} variant="secondary" className="pl-2 pr-1">
                       {condition}
                       <button
