@@ -85,10 +85,9 @@ export function LoginForm({
         <div className="flex flex-col gap-6">
           <div className="flex flex-col items-center gap-2">
             <a href="#" className="flex flex-col items-center gap-2 font-medium">
-              <div className="flex size-8 items-center justify-center rounded-md">
-                <GalleryVerticalEnd className="size-6" />
+              <div className="flex items-center justify-center">
+                <img src="./logo-transparent.png"/>
               </div>
-              <span className="sr-only">Acme Inc.</span>
             </a>
             <h1 className="text-xl font-bold">Welcome Back!</h1>
             <div className="text-center text-sm">
@@ -137,7 +136,7 @@ export function LoginForm({
               {isSubmitting ? "Signing In..." : "Login"}
             </Button>
             
-            <div className="flex flex-col gap-2 text-center text-sm">
+            {/* <div className="flex flex-col gap-2 text-center text-sm">
               <Dialog open={forgotPasswordOpen} onOpenChange={setForgotPasswordOpen}>
                 <DialogTrigger asChild>
                   <Button variant="link" className="p-0 h-auto text-sm">
@@ -173,7 +172,7 @@ export function LoginForm({
               <div className="text-muted-foreground text-xs">
                 Don't have an account? Contact your administrator.
               </div>
-            </div>
+            </div> */}
           </div>
         </div>
       </form>

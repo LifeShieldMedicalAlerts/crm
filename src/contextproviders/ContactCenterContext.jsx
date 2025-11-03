@@ -20,7 +20,8 @@ export function ContactCenterProvider({ children }) {
   const reconnectTimeout = useRef(null);
   const simpleUserRef = useRef(null);
   const remoteAudioRef = useRef(null);
-  
+  const shouldReconnectRef = useRef(true);
+
   const [sipState, setSipState] = useState('disconnected');
   const [currentCall, setCurrentCall] = useState(null);
   const [incomingCall, setIncomingCall] = useState(null);
@@ -39,10 +40,10 @@ export function ContactCenterProvider({ children }) {
 
 
   const [isHeld, setIsHeld] = useState(false);
-  const [isMuted, setIsMuted] = useState(false); 
+  const [isMuted, setIsMuted] = useState(false);
 
   const [formattedStateTime, setFormattedStateTime] = useState('(00:00)');
-  
+
   const [audioDevices, setAudioDevices] = useState({
     input: [],
     output: []
@@ -51,21 +52,21 @@ export function ContactCenterProvider({ children }) {
   const [selectedOutputDevice, setSelectedOutputDevice] = useState(null);
   const [audioPermissionGranted, setAudioPermissionGranted] = useState(false);
 
-  useEffect(()=>{
+  useEffect(() => {
     console.log('customer data:', customerData)
-},[customerData])
+  }, [customerData])
 
 
   const requestAudioPermissions = useCallback(async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
+      const stream = await navigator.mediaDevices.getUserMedia({
         audio: true,
-        video: false 
+        video: false
       });
 
       setAudioPermissionGranted(true);
       const devices = await navigator.mediaDevices.enumerateDevices();
-      
+
       const inputDevices = devices.filter(device => device.kind === 'audioinput');
       const outputDevices = devices.filter(device => device.kind === 'audiooutput');
 
@@ -102,18 +103,18 @@ export function ContactCenterProvider({ children }) {
     } catch (error) {
       console.error('Error requesting audio permissions:', error);
       setAudioPermissionGranted(false);
-      
+
       let errorMessage = "Microphone permission required for calls.";
       if (error.name === 'NotAllowedError') {
         errorMessage = "Microphone access denied. Please enable it in settings.";
       } else if (error.name === 'NotFoundError') {
         errorMessage = "No microphone found. Please connect an audio device.";
       }
-      
+
       toast.error("Audio Permission Error", {
         description: errorMessage
       });
-      
+
       return false;
     }
   }, []);
@@ -125,19 +126,19 @@ export function ContactCenterProvider({ children }) {
       if (inputDeviceId) {
         localStorage.setItem('selectedInputDevice', inputDeviceId);
         setSelectedInputDevice(inputDeviceId);
-        
+
         if (currentCall?.session) {
           try {
             const stream = await navigator.mediaDevices.getUserMedia({
               audio: { deviceId: { exact: inputDeviceId } },
               video: false
             });
-            
+
             const audioTrack = stream.getAudioTracks()[0];
             const sender = currentCall.session.sessionDescriptionHandler.peerConnection
               .getSenders()
               .find(s => s.track && s.track.kind === 'audio');
-            
+
             if (sender) {
               await sender.replaceTrack(audioTrack);
               console.log('Input device updated on active call:', inputDeviceId);
@@ -147,11 +148,11 @@ export function ContactCenterProvider({ children }) {
           }
         }
       }
-      
+
       if (outputDeviceId) {
         localStorage.setItem('selectedOutputDevice', outputDeviceId);
         setSelectedOutputDevice(outputDeviceId);
-        
+
         if (remoteAudioRef.current && remoteAudioRef.current.setSinkId) {
           try {
             await remoteAudioRef.current.setSinkId(outputDeviceId);
@@ -174,17 +175,17 @@ export function ContactCenterProvider({ children }) {
     }
   }, [currentCall]);
 
-  const updateCustomerData = async ({data}) =>{
+  const updateCustomerData = async ({ data }) => {
     console.log('recieved data ', data);
     const updateResult = await customerApi.execute('/customer/update', 'POST', data);
   }
 
-  const debouncedUpdate = useDebounce(updateCustomerData, 500); 
+  const debouncedUpdate = useDebounce(updateCustomerData, 500);
 
   const refreshAudioDevices = useCallback(async () => {
     try {
       const devices = await navigator.mediaDevices.enumerateDevices();
-      
+
       const inputDevices = devices.filter(device => device.kind === 'audioinput');
       const outputDevices = devices.filter(device => device.kind === 'audiooutput');
 
@@ -196,7 +197,7 @@ export function ContactCenterProvider({ children }) {
       if (selectedInputDevice && !inputDevices.find(d => d.deviceId === selectedInputDevice)) {
         console.warn('Selected input device no longer available, switching to default');
         const defaultDevice = inputDevices.find(d => d.deviceId === 'default') || inputDevices[0];
-        
+
         if (defaultDevice) {
           await applyAudioDevices(defaultDevice.deviceId, null);
           toast.warning('Microphone disconnected', {
@@ -212,7 +213,7 @@ export function ContactCenterProvider({ children }) {
       if (selectedOutputDevice && !outputDevices.find(d => d.deviceId === selectedOutputDevice)) {
         console.warn('Selected output device no longer available, switching to default');
         const defaultDevice = outputDevices.find(d => d.deviceId === 'default') || outputDevices[0];
-        
+
         if (defaultDevice) {
           await applyAudioDevices(null, defaultDevice.deviceId);
           toast.warning('Speaker disconnected', {
@@ -236,7 +237,7 @@ export function ContactCenterProvider({ children }) {
 
   const getAudioConstraints = useCallback(() => {
     const constraints = {
-      audio: selectedInputDevice 
+      audio: selectedInputDevice
         ? { deviceId: { exact: selectedInputDevice } }
         : true,
       video: false
@@ -246,120 +247,138 @@ export function ContactCenterProvider({ children }) {
   }, [selectedInputDevice]);
 
 
-  const connectWebSocket = useCallback(async () => {
-    if (!user?.userId) {
-      console.log('No user ID, skipping WebSocket connection');
-      return;
+const connectWebSocket = useCallback(async () => {
+  if (!user?.userId) {
+    shouldReconnectRef.current = false;
+    if (reconnectTimeout.current) {
+      clearTimeout(reconnectTimeout.current);
+      reconnectTimeout.current = null;
     }
-    
     if (wsRef.current) {
-      console.log('WebSocket already exists, skipping connection');
-      return;
+      wsRef.current.close();
+      wsRef.current = null;
+      wsAuthenticated.current = false;
+      console.log('User logged out, WebSocket closed');
+    } else {
+      console.log('No user ID, skipping WebSocket connection');
     }
+    return;
+  }
 
-    console.log('Creating new WebSocket connection...');
+  if (wsRef.current?.readyState === WebSocket.CONNECTING || 
+      wsRef.current?.readyState === WebSocket.OPEN) {
+    console.log('WebSocket already connecting/connected, skipping');
+    return;
+  }
 
-    try {
-      const token = await getBearerToken();
-      const ws = new WebSocket('wss://socket.lifeshieldmedicalalerts.com:8443/ws');
+  shouldReconnectRef.current = true;
+  console.log('Creating new WebSocket connection...');
+
+  try {
+    const token = await getBearerToken();
+    const ws = new WebSocket('wss://socket.lifeshieldmedicalalerts.com:8443/ws');
+    
+    ws.onopen = () => {
+      console.log('WebSocket connected, authenticating...');
+      setWsConnected(true);
       
-      ws.onopen = () => {
-        console.log('WebSocket connected, authenticating...');
-        setWsConnected(true);
-        
-        ws.send(JSON.stringify({
-          type: 'auth',
-          token: token
-        }));
-      };
+      ws.send(JSON.stringify({
+        type: 'auth',
+        token: token
+      }));
+    };
 
-      ws.onmessage = (event) => {
-        try {
-          const message = JSON.parse(event.data);
-          console.log('WebSocket message:', message);
+    ws.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+        console.log('WebSocket message:', message);
 
-          switch (message.type) {
-            case 'auth_required':
-              console.log('Auth required, sending token...');
-              ws.send(JSON.stringify({
-                type: 'auth',
-                token: token
-              }));
-              break;
+        switch (message.type) {
+          case 'auth_required':
+            console.log('Auth required, sending token...');
+            ws.send(JSON.stringify({
+              type: 'auth',
+              token: token
+            }));
+            break;
 
-            case 'authenticated':
-              console.log('WebSocket authenticated!');
-              wsAuthenticated.current = true;
-              
-              ws.send(JSON.stringify({
-                type: 'sync',
-                user_id: user.userId
-              }));
-              break;
+          case 'authenticated':
+            console.log('WebSocket authenticated!');
+            wsAuthenticated.current = true;
+            
+            ws.send(JSON.stringify({
+              type: 'sync',
+              user_id: user.userId
+            }));
+            break;
 
-            case 'sync_response':
-              console.log('Received sync data:', message.data);
-              setPBXDetails(message.data || {});
-              toast.success('PBX data synced successfully');
-              if(message.data?.status === 'Logged Out'){
-                console.log('Updating Status To On Break...')
-                updateStatus('On Break')
-              }
-              break;
+          case 'sync_response':
+            console.log('Received sync data:', message.data);
+            setPBXDetails(message.data || {});
+            if(message.data?.status === 'Logged Out'){
+              console.log('Updating Status To On Break...')
+              updateStatus('On Break')
+            }
+            break;
 
-            case 'database_update':
-              console.log('Database update received:', message.data);
-              setPBXDetails(message.data);
-              break;
+          case 'database_update':
+            console.log('Database update received:', message.data);
+            setPBXDetails(message.data);
+            break;
 
-            case 'status_update_ack':
-              console.log('Status update requested');
-              break;
+          case 'status_update_ack':
+            console.log('Status update requested');
+            break;
 
-            case 'pong':
-              console.log('Pong received');
-              break;
+          case 'pong':
+            console.log('Pong received');
+            break;
 
-            case 'error':
-              console.error('WebSocket error:', message.message);
-              toast.error('WebSocket Error', {
-                description: message.message
-              });
-              break;
+          case 'error':
+            console.error('WebSocket error:', message.message);
+            if (wsRef.current) {
+              wsRef.current.close();
+              wsRef.current = null;
+              wsAuthenticated.current = false;
+            }
+            break;
 
-            default:
-              console.log('Unknown message type:', message.type);
-          }
-        } catch (error) {
-          console.error('Error parsing WebSocket message:', error);
+          default:
+            console.log('Unknown message type:', message.type);
         }
-      };
+      } catch (error) {
+        console.error('Error parsing WebSocket message:', error);
+      }
+    };
 
-      ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        setSipError('WebSocket connection error');
-      };
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+      setSipError('WebSocket connection error');
+    };
 
-      ws.onclose = (event) => {
-        console.log('WebSocket closed:', event.code, event.reason);
-        setWsConnected(false);
-        wsAuthenticated.current = false;
-        wsRef.current = null;
+    ws.onclose = (event) => {
+      console.log('WebSocket closed:', event.code, event.reason);
+      setWsConnected(false);
+      wsAuthenticated.current = false;
+      wsRef.current = null;
 
-        if (user?.userId) {
-          reconnectTimeout.current = setTimeout(() => {
-            console.log('Attempting to reconnect WebSocket...');
-            connectWebSocket();
-          }, 5000);
-        }
-      };
 
-      wsRef.current = ws;
-    } catch (error) {
-      console.error('Error creating WebSocket:', error);
-      toast.error('Failed to connect to PBX server');
-    }
-  }, [user?.userId, getBearerToken]);
+      if (shouldReconnectRef.current) {
+        reconnectTimeout.current = setTimeout(() => {
+          console.log('Attempting to reconnect WebSocket...');
+          connectWebSocket();
+        }, 2000);
+      } else {
+        console.log('Reconnection disabled (user logged out)');
+      }
+    };
+
+    wsRef.current = ws;
+  } catch (error) {
+    console.error('Error creating WebSocket:', error);
+    toast.error('Failed to connect to PBX server');
+  }
+}, [user?.userId, getBearerToken]);
 
 
   const updateStatus = useCallback((newStatus) => {
@@ -383,72 +402,72 @@ export function ContactCenterProvider({ children }) {
     }));
   }, []);
 
- const handleDisposition = useCallback(async(disposition) => {
-  if(!disposition){
-    toast.error('Missing Call Disposition');
-    return false
-  }
-  try {
-    const dispoResult = await dispositionApi.execute('/call/disposition', 'POST', {callId: currentCallUUID, disposition: disposition});
+  const handleDisposition = useCallback(async (disposition) => {
+    if (!disposition) {
+      toast.error('Missing Call Disposition');
+      return false
+    }
+    try {
+      const dispoResult = await dispositionApi.execute('/call/disposition', 'POST', { callId: currentCallUUID, disposition: disposition });
 
-    if(dispoResult?.success === true){
+      if (dispoResult?.success === true) {
         setCurrentCall(null);
         setCurrentCallUUID(null);
         setIncomingCall(null);
         setShouldDisposition(false);
-        
+
         toast.success('Call dispositioned.');
         return true;
-    }else{
-      console.error('Failed to disposition call: ', JSON.stringify(dispoResult?.data || {}));
+      } else {
+        console.error('Failed to disposition call: ', JSON.stringify(dispoResult?.data || {}));
+        toast.error('Failed to save disposition');
+        return false;
+      }
+
+    } catch (error) {
+      console.error('Error saving disposition:', error);
       toast.error('Failed to save disposition');
       return false;
     }
-  
-  } catch (error) {
-    console.error('Error saving disposition:', error);
-    toast.error('Failed to save disposition');
-    return false;
-  }
-},[currentCallUUID])
+  }, [currentCallUUID])
 
   useEffect(() => {
-  if (!pbxDetails) {
-    setFormattedStateTime('(00:00)');
-    return;
-  }
-
-  const formatTime = (seconds) => {
-    const absSeconds = Math.abs(seconds);
-    const mins = Math.floor(absSeconds / 60);
-    const secs = absSeconds % 60;
-    const sign = seconds < 0 ? '-' : '';
-    return `(${sign}${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')})`;
-  };
-
-  const updateTimer = () => {
-    const elapsedTime = Math.floor((Date.now() - (pbxDetails.last_status_change * 1000)) / 1000);
-    
-    if (pbxDetails.status === 'Wrap Up') {
-      const countdownTime = Math.min(0, elapsedTime - pbxDetails.wrap_up_time);
-      setFormattedStateTime(formatTime(countdownTime));
-      if (countdownTime === 0) {
-        console.log('Setting Idle Status');
-        if(shouldDisposition === true){
-            handleDisposition('nd');
-        } 
-        updateStatus('Idle');
-      }
-    } else {
-      setFormattedStateTime(formatTime(Math.max(0, elapsedTime)));
+    if (!pbxDetails) {
+      setFormattedStateTime('(00:00)');
+      return;
     }
-  };
 
-  updateTimer();
-  const intervalId = setInterval(updateTimer, 1000);
+    const formatTime = (seconds) => {
+      const absSeconds = Math.abs(seconds);
+      const mins = Math.floor(absSeconds / 60);
+      const secs = absSeconds % 60;
+      const sign = seconds < 0 ? '-' : '';
+      return `(${sign}${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')})`;
+    };
 
-  return () => clearInterval(intervalId);
-}, [pbxDetails, shouldDisposition]);
+    const updateTimer = () => {
+      const elapsedTime = Math.floor((Date.now() - (pbxDetails.last_status_change * 1000)) / 1000);
+
+      if (pbxDetails.status === 'Wrap Up') {
+        const countdownTime = Math.min(0, elapsedTime - pbxDetails.wrap_up_time);
+        setFormattedStateTime(formatTime(countdownTime));
+        if (countdownTime === 0) {
+          console.log('Setting Idle Status');
+          if (shouldDisposition === true) {
+            handleDisposition('nd');
+          }
+          updateStatus('Idle');
+        }
+      } else {
+        setFormattedStateTime(formatTime(Math.max(0, elapsedTime)));
+      }
+    };
+
+    updateTimer();
+    const intervalId = setInterval(updateTimer, 1000);
+
+    return () => clearInterval(intervalId);
+  }, [pbxDetails, shouldDisposition]);
 
   useEffect(() => {
     requestAudioPermissions();
@@ -473,6 +492,7 @@ export function ContactCenterProvider({ children }) {
 
     return () => {
       console.log('Cleaning up WebSocket connection');
+      shouldReconnectRef.current = false;
       if (reconnectTimeout.current) {
         clearTimeout(reconnectTimeout.current);
         reconnectTimeout.current = null;
@@ -493,18 +513,18 @@ export function ContactCenterProvider({ children }) {
     return () => clearInterval(pingInterval);
   }, [sendPing]);
 
- 
+
   useEffect(() => {
     if (isConfigured.current === true) {
       console.log('SIP already configured, skipping');
       return;
     }
-    
+
     if (!dbUser?.agent_id || !dbUser?.sip_password) {
       console.log('Missing SIP credentials');
       return;
     }
-    
+
     if (!audioPermissionGranted) {
       console.log('Waiting for audio permission before configuring SIP');
       return;
@@ -512,7 +532,7 @@ export function ContactCenterProvider({ children }) {
 
     console.log('Configuring SIP.js...');
     isConfigured.current = true;
-    
+
 
     const remoteAudio = document.createElement('audio');
     remoteAudio.autoplay = true;
@@ -533,12 +553,12 @@ export function ContactCenterProvider({ children }) {
 
 
     const audioConstraints = {
-      audio: selectedInputDevice 
+      audio: selectedInputDevice
         ? { deviceId: { exact: selectedInputDevice } }
         : true,
       video: false
     };
-    
+
     const simpleUser = new Web.SimpleUser('wss://sip.lifeshieldmedicalalerts.com:9443', {
       aor: `sip:${dbUser.agent_id}@sip.lifeshieldmedicalalerts.com`,
       media: {
@@ -570,7 +590,7 @@ export function ContactCenterProvider({ children }) {
       onCallHangup: () => {
         console.log('Call ended');
         setShouldDisposition(true)
-         toast.info('Call Ended');
+        toast.info('Call Ended');
       },
       onCallReceived: async () => {
         console.log('!!!!! INCOMING CALL RECEIVED !!!!!');
@@ -586,69 +606,69 @@ export function ContactCenterProvider({ children }) {
 
 
 
-        
-        if(queueName && callerNumber){
+
+        if (queueName && callerNumber) {
 
           const [configResult, scriptResult, campaignResult, matchResult] = await Promise.all([
             configApi.execute('/config', 'POST', {}),
-            scriptApi.execute('/campaign/fetchscript', 'POST', {fetchFor: queueName}),
-            campaignAPI.execute('/campaign/fetchsettings', 'POST', {fetchFor: queueName}),
-            customerApi.execute('/customer/match/byphone', 'POST', {number: callerNumber})
+            scriptApi.execute('/campaign/fetchscript', 'POST', { fetchFor: queueName }),
+            campaignAPI.execute('/campaign/fetchsettings', 'POST', { fetchFor: queueName }),
+            customerApi.execute('/customer/match/byphone', 'POST', { number: callerNumber })
           ]);
 
-          if(configResult?.success === true){
-            console.log('Setting product offeerings:', configResult?.data); 
-              setProductOfferings(configResult?.data);
-          }else{
+          if (configResult?.success === true) {
+            console.log('Setting product offeerings:', configResult?.data);
+            setProductOfferings(configResult?.data);
+          } else {
             toast.error('Failed to fetch pricing information.');
           }
           if (scriptResult?.success !== false) {
-            console.log('Setting script data:', scriptResult?.data?.script_content); 
+            console.log('Setting script data:', scriptResult?.data?.script_content);
             setScriptData(scriptResult?.data?.script_content);
-          }else{
+          } else {
             toast.error('Failed to fetch script data');
           }
 
           if (campaignResult?.success !== false) {
-            console.log('Setting campaign data:', campaignResult?.data); 
+            console.log('Setting campaign data:', campaignResult?.data);
             setCampaignSettings(campaignResult?.data);
-          }else{
+          } else {
             toast.error('Failed to fetch script data');
           }
 
           if (matchResult?.success === true) {
-            if(matchResult?.data && Array.isArray(matchResult.data)){
-              if(matchResult.data.length === 0){
-                  //No customer found, create fresh one
-                  const creationResult = await customerApi.execute('/customer/create', 'POST', {number: callerNumber}, 2)
-                  if(creationResult?.success === true && creationResult?.data){
-                    setCustomerData(creationResult.data);
-                  }else{
-                    toast.error('Failed to create new customer.');
-                  }
-              }else if(matchResult.data.length === 1){
-                  const pullCustomer = await customerApi.execute('/customer/load', 'POST', {customerId: matchResult.data[0]?.customer_id}, 2);
-                  if(pullCustomer?.success === true && pullCustomer?.data){
-                    setCustomerData(pullCustomer.data)
-                  }else{
-                    toast.error('Failed to load customer data.')
-                  }
-              }else{
+            if (matchResult?.data && Array.isArray(matchResult.data)) {
+              if (matchResult.data.length === 0) {
+                //No customer found, create fresh one
+                const creationResult = await customerApi.execute('/customer/create', 'POST', { number: callerNumber }, 2)
+                if (creationResult?.success === true && creationResult?.data) {
+                  setCustomerData(creationResult.data);
+                } else {
+                  toast.error('Failed to create new customer.');
+                }
+              } else if (matchResult.data.length === 1) {
+                const pullCustomer = await customerApi.execute('/customer/load', 'POST', { customerId: matchResult.data[0]?.customer_id }, 2);
+                if (pullCustomer?.success === true && pullCustomer?.data) {
+                  setCustomerData(pullCustomer.data)
+                } else {
+                  toast.error('Failed to load customer data.')
+                }
+              } else {
                 setMatchedContacts(matchResult.data)
               }
-            }else{
+            } else {
               toast.error('Unknown customer data object returned');
             }
           } else {
             toast.error('Failed to load customer information');
           }
         }
-        
+
         setIncomingCall({
           callerNumber,
           simpleUser
         });
-        
+
         toast.info('Incoming call', {
           description: `From: ${callerNumber}`
         });
@@ -658,7 +678,6 @@ export function ContactCenterProvider({ children }) {
       onRegistered: () => {
         console.log('SIP registered');
         setSipState('registered');
-        toast.success('SIP registered');
       },
       onUnregistered: () => {
         console.log('SIP unregistered');
@@ -685,7 +704,6 @@ export function ContactCenterProvider({ children }) {
       .catch((error) => {
         console.error('SIP.js connection error:', error);
         setSipState('disconnected');
-        toast.error('SIP connection failed');
       });
 
     simpleUserRef.current = simpleUser;
@@ -697,7 +715,7 @@ export function ContactCenterProvider({ children }) {
         audio.remove();
       }
       remoteAudioRef.current = null;
-      
+
       if (simpleUserRef.current) {
         simpleUserRef.current.unregister()
           .then(() => simpleUserRef.current.disconnect())
@@ -777,7 +795,6 @@ export function ContactCenterProvider({ children }) {
 
     try {
       await currentCall.hangup();
-      //setCurrentCall(null);
     } catch (error) {
       console.error('Error hanging up call:', error);
       toast.error('Failed to hangup');
@@ -786,7 +803,7 @@ export function ContactCenterProvider({ children }) {
 
   const toggleMute = useCallback(async () => {
     if (!currentCall) return;
-    
+
     try {
       if (currentCall.isMuted()) {
         await currentCall.unmute();
@@ -805,7 +822,7 @@ export function ContactCenterProvider({ children }) {
 
   const toggleHold = useCallback(async () => {
     if (!currentCall) return;
-    
+
     try {
       if (currentCall.isHeld()) {
         await currentCall.unhold();
@@ -847,7 +864,7 @@ export function ContactCenterProvider({ children }) {
     requestAudioPermissions,
     refreshAudioDevices,
     applyAudioDevices,
-    
+
     shouldDisposition,
     handleDisposition,
     currentCallUUID,

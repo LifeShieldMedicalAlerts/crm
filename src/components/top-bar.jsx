@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Select,
@@ -36,21 +36,19 @@ import DeviceSettings from "../components/device-settings"
 import { toast } from "sonner"
 
 export function TopBar() {
-  const {dbUser} = useAuth();
+  const {dbUser, logout} = useAuth();
   const {
     fetchCustomerData,
     sipError,
     sipState,
     currentCall,
+    shouldDisposition,
     makeCall,
-    answerCall,
-    rejectCall,
     hangupCall,
     toggleMute,
     toggleHold,
     isHeld,
     isMuted,
-    wsConnected,
     updateStatus,
     pbxDetails,
     formattedStateTime
@@ -75,6 +73,24 @@ export function TopBar() {
   const testOutboundCall = (number) =>{
     makeCall('8603919592')
   }
+
+  const attemptLogout = useCallback(async () =>{
+    if(!currentCall && shouldDisposition === false){
+      //all clear
+      updateStatus('Logged Out');
+      await logout();
+    }else{
+      if(shouldDisposition === true){
+        toast.error('Failed to log out', {
+          description: 'Please disposition your call before logging out.'
+        });
+      }else{
+        toast.error('Failed to log out', {
+          description: 'Please end and disposition your call before logging out.'
+        });
+      }
+    }
+  },[currentCall, shouldDisposition])
 
   return (
     <>
@@ -167,15 +183,11 @@ export function TopBar() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem>
-                <User className="h-4 w-4 mr-2" />
-                Profile
-              </DropdownMenuItem>
              <DropdownMenuItem onClick={() => setDeviceSettingsOpen(true)}>
             <Settings className="h-4 w-4 mr-2" />
             Settings
           </DropdownMenuItem>
-              <DropdownMenuItem onClick={()=>{}} className="text-red-600">
+              <DropdownMenuItem onClick={attemptLogout} className="text-red-600">
                 <LogOut className="h-4 w-4 mr-2" />
                 Log Out
               </DropdownMenuItem>

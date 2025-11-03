@@ -23,7 +23,7 @@ function ProtectedRoute() {
 function PublicRoute() {
   const { isAuthenticated, loading } = useAuth();
   if (loading) {
-    return <div>Loading...</div>;
+    return <div></div>;
   }
   return isAuthenticated ? <Navigate to="/dashboard" /> : <Outlet />;
 }
