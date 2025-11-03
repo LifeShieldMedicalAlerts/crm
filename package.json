@@ -69,7 +69,9 @@
     "dist/**/*",
     "main.cjs",
     "update.html",
-    "public/preload.js"
+    "public/preload.js",
+    "node_modules/**/*",
+    "!node_modules/@tailwindcss/oxide*"
   ],
   "asarUnpack": [
     "node_modules/electron-updater/**/*"
