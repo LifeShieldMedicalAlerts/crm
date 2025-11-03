@@ -21,6 +21,7 @@ export function ContactCenterProvider({ children }) {
   const simpleUserRef = useRef(null);
   const remoteAudioRef = useRef(null);
   const shouldReconnectRef = useRef(true);
+  const callAnsweredSoundRef = useRef(null);
 
   const [sipState, setSipState] = useState('disconnected');
   const [currentCall, setCurrentCall] = useState(null);
@@ -470,6 +471,18 @@ const connectWebSocket = useCallback(async () => {
   }, [pbxDetails, shouldDisposition]);
 
   useEffect(() => {
+  callAnsweredSoundRef.current = new Audio('/sounds/incoming-call.mp3');
+  callAnsweredSoundRef.current.volume = 0.8;
+  
+  return () => {
+    if (callAnsweredSoundRef.current) {
+      callAnsweredSoundRef.current.pause();
+      callAnsweredSoundRef.current = null;
+    }
+  };
+}, []);
+
+  useEffect(() => {
     requestAudioPermissions();
 
     const handleDeviceChange = () => {
@@ -586,6 +599,13 @@ const connectWebSocket = useCallback(async () => {
       onCallAnswered: () => {
         console.log('Call answered');
         setCurrentCall(simpleUser);
+
+        if (callAnsweredSoundRef.current) {
+          callAnsweredSoundRef.current.currentTime = 0;
+          callAnsweredSoundRef.current.play().catch(err => {
+            console.error('Error playing call answered sound:', err);
+          });
+        }
       },
       onCallHangup: () => {
         console.log('Call ended');
