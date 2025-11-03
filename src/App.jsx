@@ -1,5 +1,5 @@
 // src/App.jsx
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
+import { HashRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contextproviders/AuthContext";
 import { ContactCenterProvider } from "./contextproviders/ContactCenterContext";
 import Login from "./pages/Login";
@@ -30,7 +30,7 @@ function PublicRoute() {
 
 function App() {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <AuthProvider>
         <ContactCenterProvider>
           <Routes>
@@ -53,7 +53,7 @@ function App() {
         </ContactCenterProvider>
       </AuthProvider>
       <Toaster />
-    </BrowserRouter>
+    </HashRouter>
   );
 }
 

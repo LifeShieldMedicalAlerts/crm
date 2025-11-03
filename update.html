@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Update</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      -webkit-app-region: drag;
+    }
+
+    .container {
+      text-align: center;
+      padding: 40px;
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid #e0e0e0;
+      border-top-color: #000000;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 24px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    #message {
+      font-size: 16px;
+      color: #000000;
+      margin-bottom: 8px;
+    }
+
+    #status {
+      font-size: 14px;
+      color: #666666;
+    }
+
+    .progress-bar {
+      width: 300px;
+      height: 4px;
+      background: #e0e0e0;
+      margin: 20px auto 12px;
+      border-radius: 2px;
+      overflow: hidden;
+      display: none;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: #000000;
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="spinner" id="spinner"></div>
+    <div id="message">Checking for updates...</div>
+    <div class="progress-bar" id="progress-container">
+      <div class="progress-fill" id="progress-bar"></div>
+    </div>
+    <div id="status"></div>
+  </div>
+
+  <script>
+    const { ipcRenderer } = require('electron');
+
+    ipcRenderer.on('update-status', (event, data) => {
+      document.getElementById('message').textContent = data.message;
+      if (data.status) {
+        document.getElementById('status').textContent = data.status;
+      }
+    });
+
+    ipcRenderer.on('update-progress', (event, percent) => {
+      const spinner = document.getElementById('spinner');
+      const progressContainer = document.getElementById('progress-container');
+      const progressBar = document.getElementById('progress-bar');
+      
+      spinner.style.display = 'none';
+      progressContainer.style.display = 'block';
+      progressBar.style.width = Math.round(percent) + '%';
+      document.getElementById('status').textContent = Math.round(percent) + '%';
+    });
+  </script>
+</body>
+</html>
