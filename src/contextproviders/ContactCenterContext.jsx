@@ -277,11 +277,21 @@ const connectWebSocket = useCallback(async () => {
 
   try {
     const token = await getBearerToken();
+    
+    if (!token) {
+      console.error('No token available for WebSocket');
+      return;
+    }
+
     const ws = new WebSocket('wss://socket.lifeshieldmedicalalerts.com:8443/ws');
+    
+    let authAttempts = 0;
+    const MAX_AUTH_ATTEMPTS = 3;
     
     ws.onopen = () => {
       console.log('WebSocket connected, authenticating...');
       setWsConnected(true);
+      authAttempts = 0;
       
       ws.send(JSON.stringify({
         type: 'auth',
@@ -289,23 +299,41 @@ const connectWebSocket = useCallback(async () => {
       }));
     };
 
-    ws.onmessage = (event) => {
+    ws.onmessage = async (event) => {
       try {
         const message = JSON.parse(event.data);
         console.log('WebSocket message:', message);
 
         switch (message.type) {
           case 'auth_required':
-            console.log('Auth required, sending token...');
+            authAttempts++;
+            console.log(`Auth required (attempt ${authAttempts}/${MAX_AUTH_ATTEMPTS})`);
+            
+            if (authAttempts > MAX_AUTH_ATTEMPTS) {
+              console.error('Max auth attempts reached, closing connection');
+              ws.close();
+              return;
+            }
+
+            console.log('Getting fresh token for WebSocket auth...');
+            const freshToken = await getBearerToken();
+            
+            if (!freshToken) {
+              console.error('Failed to get fresh token for WebSocket');
+              ws.close();
+              return;
+            }
+            
             ws.send(JSON.stringify({
               type: 'auth',
-              token: token
+              token: freshToken
             }));
             break;
 
           case 'authenticated':
             console.log('WebSocket authenticated!');
             wsAuthenticated.current = true;
+            authAttempts = 0;
             
             ws.send(JSON.stringify({
               type: 'sync',
@@ -314,29 +342,33 @@ const connectWebSocket = useCallback(async () => {
             break;
 
           case 'sync_response':
-            console.log('Received sync data:', message.data);
+            console.log('Received sync data');
             setPBXDetails(message.data || {});
-            if(message.data?.status === 'Logged Out'){
-              console.log('Updating Status To On Break...')
-              updateStatus('On Break')
+            if (message.data?.status === 'Logged Out') {
+              console.log('Updating Status To On Break...');
+              updateStatus('On Break');
             }
             break;
 
           case 'database_update':
-            console.log('Database update received:', message.data);
+            console.log('Database update received');
             setPBXDetails(message.data);
             break;
 
           case 'status_update_ack':
-            console.log('Status update requested');
+            console.log('Status update acknowledged');
             break;
 
           case 'pong':
-            console.log('Pong received');
             break;
 
           case 'error':
             console.error('WebSocket error:', message.message);
+            
+            if (message.reason === 'token_expired' || message.message?.includes('Authentication failed')) {
+              console.log('Auth error detected, will reconnect with fresh token after delay');
+            }
+            
             if (wsRef.current) {
               wsRef.current.close();
               wsRef.current = null;
@@ -363,15 +395,20 @@ const connectWebSocket = useCallback(async () => {
       wsAuthenticated.current = false;
       wsRef.current = null;
 
-
-      if (shouldReconnectRef.current) {
-        reconnectTimeout.current = setTimeout(() => {
-          console.log('Attempting to reconnect WebSocket...');
-          connectWebSocket();
-        }, 2000);
-      } else {
+      if (!shouldReconnectRef.current || !user?.userId) {
         console.log('Reconnection disabled (user logged out)');
+        return;
       }
+
+      const baseDelay = 2000;
+      const maxDelay = 30000;
+      const reconnectDelay = Math.min(baseDelay * Math.pow(1.5, authAttempts), maxDelay);
+      
+      console.log(`Will attempt to reconnect in ${reconnectDelay}ms...`);
+      reconnectTimeout.current = setTimeout(() => {
+        console.log('Attempting to reconnect WebSocket...');
+        connectWebSocket();
+      }, reconnectDelay);
     };
 
     wsRef.current = ws;
@@ -471,7 +508,7 @@ const connectWebSocket = useCallback(async () => {
   }, [pbxDetails, shouldDisposition]);
 
   useEffect(() => {
-  callAnsweredSoundRef.current = new Audio('/sounds/incoming-call.mp3');
+  callAnsweredSoundRef.current = new Audio('/incoming-call.mp3');
   callAnsweredSoundRef.current.volume = 0.8;
   
   return () => {
@@ -660,14 +697,14 @@ const connectWebSocket = useCallback(async () => {
             if (matchResult?.data && Array.isArray(matchResult.data)) {
               if (matchResult.data.length === 0) {
                 //No customer found, create fresh one
-                const creationResult = await customerApi.execute('/customer/create', 'POST', { number: callerNumber }, 2)
+                const creationResult = await customerApi.execute('/customer/create', 'POST', { number: callerNumber })
                 if (creationResult?.success === true && creationResult?.data) {
                   setCustomerData(creationResult.data);
                 } else {
                   toast.error('Failed to create new customer.');
                 }
               } else if (matchResult.data.length === 1) {
-                const pullCustomer = await customerApi.execute('/customer/load', 'POST', { customerId: matchResult.data[0]?.customer_id }, 2);
+                const pullCustomer = await customerApi.execute('/customer/load', 'POST', { customerId: matchResult.data[0]?.customer_id });
                 if (pullCustomer?.success === true && pullCustomer?.data) {
                   setCustomerData(pullCustomer.data)
                 } else {

@@ -13,6 +13,8 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [loginStep, setLoginStep] = useState('initial');
   const [mfaUser, setMfaUser] = useState(null);
+  const isRefreshing = useRef(false);
+  const refreshPromise = useRef(null);
 
   useEffect(() => {
     checkCurrentUser();
@@ -208,37 +210,42 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const getBearerToken = async () => {
-    try {
-      if (user && user.idToken) { 
-        return user.idToken;
-      }
+  const refreshSession = useCallback(async () => {
+  // Prevent concurrent refresh attempts
+  if (isRefreshing.current) {
+    console.log('Token refresh already in progress, waiting...');
+    return refreshPromise.current;
+  }
 
-      const result = await CognitoAuthService.refreshSession();
-      if (result.success) {
-        return result.idToken; 
-      }
-
-      return null;
-    } catch (error) {
-      console.error('Error getting bearer token:', error);
-      return null;
-    }
-  };
-
-  const refreshSession = async () => {
+  isRefreshing.current = true;
+  refreshPromise.current = (async () => {
     try {
       console.log('Refreshing session...');
-      const result = await CognitoAuthService.refreshSession();
+      
+      let refreshToken = user?.refreshToken;
+      
+      if (!refreshToken) {
+        const storedTokens = CognitoAuthService.getStoredTokens();
+        refreshToken = storedTokens?.refreshToken;
+      }
+      
+      if (!refreshToken) {
+        console.error('No refresh token available');
+        setUser(null);
+        return { success: false, error: 'No refresh token available' };
+      }
+
+      const result = await CognitoAuthService.refreshSession(refreshToken);
 
       if (result.success) {
-        setUser(prevUser => ({
-          ...prevUser,
-          accessToken: result.accessToken,
-          idToken: result.idToken
-        }));
-        return { success: true };
+        console.log('Session refresh successful');
+        setUser(result.user);
+        return { 
+          success: true, 
+          idToken: result.user.idToken 
+        };
       } else {
+        console.error('Session refresh failed:', result.error);
         setUser(null);
         return { success: false, error: result.error };
       }
@@ -246,8 +253,50 @@ export function AuthProvider({ children }) {
       console.error('Session refresh error:', error);
       setUser(null);
       return { success: false, error: error.message };
+    } finally {
+      isRefreshing.current = false;
+      refreshPromise.current = null;
     }
-  };
+  })();
+
+  return refreshPromise.current;
+},[user]);
+
+const getBearerToken = useCallback(async () => {
+  try {
+    if (user?.idToken) {
+      try {
+        const payload = JSON.parse(atob(user.idToken.split('.')[1]));
+        const expiresAt = payload.exp * 1000;
+        const timeUntilExpiry = expiresAt - Date.now();
+
+        if (timeUntilExpiry > 5 * 60 * 1000) {
+          console.log('Using cached token (valid for', Math.floor(timeUntilExpiry / 60000), 'more minutes)');
+          return user.idToken;
+        }
+        
+        console.log('Token expiring soon or expired, refreshing...');
+      } catch (parseError) {
+        console.error('Error parsing token:', parseError);
+      }
+    }
+
+    console.log('Calling refreshSession from getBearerToken');
+    const result = await refreshSession();
+    
+    if (result.success && result.idToken) {
+      console.log('Got fresh token from refresh');
+      return result.idToken;
+    }
+
+    console.error('Failed to get token from refresh');
+    return null;
+  } catch (error) {
+    console.error('Error getting bearer token:', error);
+    return null;
+  }
+}, [user, refreshSession]);
+
 
   const value = {
     user,
