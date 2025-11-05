@@ -42,7 +42,7 @@ import {
   X,
   Loader2
 } from 'lucide-react';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 
 const CHRONIC_CONDITIONS = [
@@ -79,8 +79,8 @@ const formatPhoneNumber = (value) => {
 };
 
 export default function CallScript() {
-  const {dbUser} = useAuth();
-  const { scriptData, customerData, productOfferings, debouncedUpdate } = useContactCenter();
+  const { dbUser } = useAuth();
+  const { scriptData, customerData, productOfferings, debouncedUpdate, currentCall } = useContactCenter();
   const paymentApi = useApi();
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -88,6 +88,7 @@ export default function CallScript() {
   const [isCreatingSubscription, setIsCreatingSubscription] = useState(false);
   const [isSubscriptionCreated, setIsSubscriptionCreated] = useState(false);
   const [disclaimerAccepted, setDisclaimerAccepted] = useState(false);
+  const prevCallRef = useRef(null);
 
   // Local form state that syncs with customerData
   const [formData, setFormData] = useState({
@@ -110,15 +111,14 @@ export default function CallScript() {
     emergency_contacts: []
   });
 
-
-
-  // Separate billing information state (not saved to customer DB)
   const [billingInformation, setBillingInformation] = useState({
     type: 'checking',
     routing_number: '',
     account_number: '',
     selected_product: '',
-    frequency: 'Monthly'
+    frequency: 'Monthly',
+    charge_date: new Date().toLocaleDateString('en-US', {year: 'numeric', month: 'long', day: 'numeric'}),
+    charge_amount: '$49.99'
   });
 
   const [newEmergencyContact, setNewEmergencyContact] = useState({
@@ -132,7 +132,7 @@ export default function CallScript() {
   // Sync customerData to local formData
   useEffect(() => {
     if (customerData) {
-      setFormData({...customerData})
+      setFormData({ ...customerData })
     }
   }, [customerData]);
 
@@ -158,12 +158,12 @@ export default function CallScript() {
   }, [currentSlideIndex]);
 
   const formatDate = (date = new Date()) => {
-  return date.toLocaleDateString('en-US', { 
-    month: 'short', 
-    day: 'numeric', 
-    year: 'numeric' 
-  });
-};
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
 
 
   const handleFieldChange = (name, value) => {
@@ -173,11 +173,26 @@ export default function CallScript() {
     debouncedUpdate({ data: updatedData });
   };
 
-  const handleBillingFieldChange = (name, value) => {
-    setBillingInformation(prev => ({ ...prev, [name]: value }));
+  const handleBillingFieldChange = useCallback((name, value) => {
+    if (name === 'selected_product') {
+      const foundProduct = productOfferings?.find(p => p.internal_product_id === value);
+      if (foundProduct?.friendly_price) {
+        setBillingInformation(prev => ({
+          ...prev,
+          [name]: value,
+          charge_amount: foundProduct.friendly_price,
+          frequency: foundProduct.billing_frequency
+
+        }));
+      }else{
+        setBillingInformation(prev => ({ ...prev, [name]: value }));
+      }
+    } else {
+      setBillingInformation(prev => ({ ...prev, [name]: value }));
+    }
     // Reset verification when billing info changes
     setIsAccountVerified(false);
-  };
+  }, [productOfferings]);
 
   const handleCheckboxChange = (name, checked) => {
     const updatedData = {
@@ -290,13 +305,16 @@ export default function CallScript() {
     setIsCreatingSubscription(true);
 
     try {
+      const filteredBilling = billingInformation;
+      delete filteredBilling.charge_amount;
+      delete filteredBilling.charge_date;
       const result = await paymentApi.execute('/billing/subscribecustomer', 'POST', {
-        customerInformation: formData,
-        paymentInformation: billingInformation
+        customerInformation: formData?.customer_id,
+        paymentInformation: filteredBilling
       });
 
       setIsCreatingSubscription(false);
-
+      toast.success('Subscription created successfully!');
       return true;
 
       if (result.success) {
@@ -428,26 +446,26 @@ export default function CallScript() {
     }
   };
 
-const handlePlaceholders = useCallback((content) => {
-  if (!content) return content;
-  
-  const placeholderRegex = /\{([^}]+)\}/g;
-  
-  return content.replace(placeholderRegex, (fullMatch, placeholder) => {
-    const [route, value] = placeholder.split('.');
-    
-    switch(route) {
-      case 'Customer':
-        return customerData?.[value] || '';
-      case 'Billing':
-        return billingInformation?.[value] || '';
-      case 'Agent':
-        return dbUser?.[value] || '';
-      default:
-        return fullMatch; 
-    }
-  });
-}, [customerData, billingInformation, dbUser]);
+  const handlePlaceholders = useCallback((content) => {
+    if (!content) return content;
+
+    const placeholderRegex = /\{([^}]+)\}/g;
+
+    return content.replace(placeholderRegex, (fullMatch, placeholder) => {
+      const [route, value] = placeholder.split('.');
+
+      switch (route) {
+        case 'Customer':
+          return customerData?.[value] || '';
+        case 'Billing':
+          return billingInformation?.[value] || '';
+        case 'Agent':
+          return dbUser?.[value] || '';
+        default:
+          return fullMatch;
+      }
+    });
+  }, [customerData, billingInformation, dbUser]);
 
   const renderContent = (content, index) => {
     switch (content.type) {
@@ -1172,6 +1190,57 @@ const handlePlaceholders = useCallback((content) => {
         );
     }
   };
+
+useEffect(() => {
+  if (prevCallRef.current !== null && currentCall === null) {
+    // Reset all states
+    setCurrentSlideIndex(0);
+    setIsAccountVerified(false);
+    setIsSubscriptionCreated(false);
+    setDisclaimerAccepted(false);
+    setBillingInformation({
+      type: 'checking',
+      routing_number: '',
+      account_number: '',
+      selected_product: '',
+      frequency: 'Monthly',
+      charge_date: new Date().toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      }),
+      charge_amount: '$49.99'
+    });
+    setFormData({
+      first_name: '',
+      last_name: '',
+      email_address: '',
+      primary_phone: '',
+      secondary_phone: '',
+      contact_status: 'not_subscribed',
+      have_consent: false,
+      last_consent: '',
+      referral_source: '',
+      street_address_one: '',
+      street_address_two: '',
+      address_city: '',
+      address_state: '',
+      address_zip: '',
+      address_county: '',
+      conditions: [],
+      emergency_contacts: []
+    });
+    setNewEmergencyContact({
+      first_name: '',
+      last_name: '',
+      phone_number: '',
+      email_address: ''
+    });
+    setShowAddContact(false);
+  }
+
+  prevCallRef.current = currentCall;
+}, [currentCall]);
 
   return (
     <div className="h-full flex flex-col">

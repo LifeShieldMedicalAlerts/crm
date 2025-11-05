@@ -248,175 +248,175 @@ export function ContactCenterProvider({ children }) {
   }, [selectedInputDevice]);
 
 
-const connectWebSocket = useCallback(async () => {
-  if (!user?.userId) {
-    shouldReconnectRef.current = false;
-    if (reconnectTimeout.current) {
-      clearTimeout(reconnectTimeout.current);
-      reconnectTimeout.current = null;
-    }
-    if (wsRef.current) {
-      wsRef.current.close();
-      wsRef.current = null;
-      wsAuthenticated.current = false;
-      console.log('User logged out, WebSocket closed');
-    } else {
-      console.log('No user ID, skipping WebSocket connection');
-    }
-    return;
-  }
-
-  if (wsRef.current?.readyState === WebSocket.CONNECTING || 
-      wsRef.current?.readyState === WebSocket.OPEN) {
-    console.log('WebSocket already connecting/connected, skipping');
-    return;
-  }
-
-  shouldReconnectRef.current = true;
-  console.log('Creating new WebSocket connection...');
-
-  try {
-    const token = await getBearerToken();
-    
-    if (!token) {
-      console.error('No token available for WebSocket');
+  const connectWebSocket = useCallback(async () => {
+    if (!user?.userId) {
+      shouldReconnectRef.current = false;
+      if (reconnectTimeout.current) {
+        clearTimeout(reconnectTimeout.current);
+        reconnectTimeout.current = null;
+      }
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+        wsAuthenticated.current = false;
+        console.log('User logged out, WebSocket closed');
+      } else {
+        console.log('No user ID, skipping WebSocket connection');
+      }
       return;
     }
 
-    const ws = new WebSocket('wss://socket.lifeshieldmedicalalerts.com:8443/ws');
-    
-    let authAttempts = 0;
-    const MAX_AUTH_ATTEMPTS = 3;
-    
-    ws.onopen = () => {
-      console.log('WebSocket connected, authenticating...');
-      setWsConnected(true);
-      authAttempts = 0;
-      
-      ws.send(JSON.stringify({
-        type: 'auth',
-        token: token
-      }));
-    };
+    if (wsRef.current?.readyState === WebSocket.CONNECTING ||
+      wsRef.current?.readyState === WebSocket.OPEN) {
+      console.log('WebSocket already connecting/connected, skipping');
+      return;
+    }
 
-    ws.onmessage = async (event) => {
-      try {
-        const message = JSON.parse(event.data);
-        console.log('WebSocket message:', message);
+    shouldReconnectRef.current = true;
+    console.log('Creating new WebSocket connection...');
 
-        switch (message.type) {
-          case 'auth_required':
-            authAttempts++;
-            console.log(`Auth required (attempt ${authAttempts}/${MAX_AUTH_ATTEMPTS})`);
-            
-            if (authAttempts > MAX_AUTH_ATTEMPTS) {
-              console.error('Max auth attempts reached, closing connection');
-              ws.close();
-              return;
-            }
+    try {
+      const token = await getBearerToken();
 
-            console.log('Getting fresh token for WebSocket auth...');
-            const freshToken = await getBearerToken();
-            
-            if (!freshToken) {
-              console.error('Failed to get fresh token for WebSocket');
-              ws.close();
-              return;
-            }
-            
-            ws.send(JSON.stringify({
-              type: 'auth',
-              token: freshToken
-            }));
-            break;
-
-          case 'authenticated':
-            console.log('WebSocket authenticated!');
-            wsAuthenticated.current = true;
-            authAttempts = 0;
-            
-            ws.send(JSON.stringify({
-              type: 'sync',
-              user_id: user.userId
-            }));
-            break;
-
-          case 'sync_response':
-            console.log('Received sync data');
-            setPBXDetails(message.data || {});
-            if (message.data?.status === 'Logged Out') {
-              console.log('Updating Status To On Break...');
-              updateStatus('On Break');
-            }
-            break;
-
-          case 'database_update':
-            console.log('Database update received');
-            setPBXDetails(message.data);
-            break;
-
-          case 'status_update_ack':
-            console.log('Status update acknowledged');
-            break;
-
-          case 'pong':
-            break;
-
-          case 'error':
-            console.error('WebSocket error:', message.message);
-            
-            if (message.reason === 'token_expired' || message.message?.includes('Authentication failed')) {
-              console.log('Auth error detected, will reconnect with fresh token after delay');
-            }
-            
-            if (wsRef.current) {
-              wsRef.current.close();
-              wsRef.current = null;
-              wsAuthenticated.current = false;
-            }
-            break;
-
-          default:
-            console.log('Unknown message type:', message.type);
-        }
-      } catch (error) {
-        console.error('Error parsing WebSocket message:', error);
-      }
-    };
-
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
-      setSipError('WebSocket connection error');
-    };
-
-    ws.onclose = (event) => {
-      console.log('WebSocket closed:', event.code, event.reason);
-      setWsConnected(false);
-      wsAuthenticated.current = false;
-      wsRef.current = null;
-
-      if (!shouldReconnectRef.current || !user?.userId) {
-        console.log('Reconnection disabled (user logged out)');
+      if (!token) {
+        console.error('No token available for WebSocket');
         return;
       }
 
-      const baseDelay = 2000;
-      const maxDelay = 30000;
-      const reconnectDelay = Math.min(baseDelay * Math.pow(1.5, authAttempts), maxDelay);
-      
-      console.log(`Will attempt to reconnect in ${reconnectDelay}ms...`);
-      reconnectTimeout.current = setTimeout(() => {
-        console.log('Attempting to reconnect WebSocket...');
-        connectWebSocket();
-      }, reconnectDelay);
-    };
+      const ws = new WebSocket('wss://socket.lifeshieldmedicalalerts.com:8443/ws');
 
-    wsRef.current = ws;
-  } catch (error) {
-    console.error('Error creating WebSocket:', error);
-    toast.error('Failed to connect to PBX server');
-  }
-}, [user?.userId, getBearerToken]);
+      let authAttempts = 0;
+      const MAX_AUTH_ATTEMPTS = 3;
+
+      ws.onopen = () => {
+        console.log('WebSocket connected, authenticating...');
+        setWsConnected(true);
+        authAttempts = 0;
+
+        ws.send(JSON.stringify({
+          type: 'auth',
+          token: token
+        }));
+      };
+
+      ws.onmessage = async (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          console.log('WebSocket message:', message);
+
+          switch (message.type) {
+            case 'auth_required':
+              authAttempts++;
+              console.log(`Auth required (attempt ${authAttempts}/${MAX_AUTH_ATTEMPTS})`);
+
+              if (authAttempts > MAX_AUTH_ATTEMPTS) {
+                console.error('Max auth attempts reached, closing connection');
+                ws.close();
+                return;
+              }
+
+              console.log('Getting fresh token for WebSocket auth...');
+              const freshToken = await getBearerToken();
+
+              if (!freshToken) {
+                console.error('Failed to get fresh token for WebSocket');
+                ws.close();
+                return;
+              }
+
+              ws.send(JSON.stringify({
+                type: 'auth',
+                token: freshToken
+              }));
+              break;
+
+            case 'authenticated':
+              console.log('WebSocket authenticated!');
+              wsAuthenticated.current = true;
+              authAttempts = 0;
+
+              ws.send(JSON.stringify({
+                type: 'sync',
+                user_id: user.userId
+              }));
+              break;
+
+            case 'sync_response':
+              console.log('Received sync data');
+              setPBXDetails(message.data || {});
+              if (message.data?.status === 'Logged Out') {
+                console.log('Updating Status To On Break...');
+                updateStatus('On Break');
+              }
+              break;
+
+            case 'database_update':
+              console.log('Database update received');
+              setPBXDetails(message.data);
+              break;
+
+            case 'status_update_ack':
+              console.log('Status update acknowledged');
+              break;
+
+            case 'pong':
+              break;
+
+            case 'error':
+              console.error('WebSocket error:', message.message);
+
+              if (message.reason === 'token_expired' || message.message?.includes('Authentication failed')) {
+                console.log('Auth error detected, will reconnect with fresh token after delay');
+              }
+
+              if (wsRef.current) {
+                wsRef.current.close();
+                wsRef.current = null;
+                wsAuthenticated.current = false;
+              }
+              break;
+
+            default:
+              console.log('Unknown message type:', message.type);
+          }
+        } catch (error) {
+          console.error('Error parsing WebSocket message:', error);
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        setSipError('WebSocket connection error');
+      };
+
+      ws.onclose = (event) => {
+        console.log('WebSocket closed:', event.code, event.reason);
+        setWsConnected(false);
+        wsAuthenticated.current = false;
+        wsRef.current = null;
+
+        if (!shouldReconnectRef.current || !user?.userId) {
+          console.log('Reconnection disabled (user logged out)');
+          return;
+        }
+
+        const baseDelay = 2000;
+        const maxDelay = 30000;
+        const reconnectDelay = Math.min(baseDelay * Math.pow(1.5, authAttempts), maxDelay);
+
+        console.log(`Will attempt to reconnect in ${reconnectDelay}ms...`);
+        reconnectTimeout.current = setTimeout(() => {
+          console.log('Attempting to reconnect WebSocket...');
+          connectWebSocket();
+        }, reconnectDelay);
+      };
+
+      wsRef.current = ws;
+    } catch (error) {
+      console.error('Error creating WebSocket:', error);
+      toast.error('Failed to connect to PBX server');
+    }
+  }, [user?.userId, getBearerToken]);
 
 
   const updateStatus = useCallback((newStatus) => {
@@ -445,27 +445,37 @@ const connectWebSocket = useCallback(async () => {
       toast.error('Missing Call Disposition');
       return false
     }
-    try {
-      const dispoResult = await dispositionApi.execute('/call/disposition', 'POST', { callId: currentCallUUID, disposition: disposition });
+    if (currentCallUUID) {
+      try {
+        const dispoResult = await dispositionApi.execute('/call/disposition', 'POST', { callId: currentCallUUID, disposition: disposition });
 
-      if (dispoResult?.success === true) {
-        setCurrentCall(null);
-        setCurrentCallUUID(null);
-        setIncomingCall(null);
-        setShouldDisposition(false);
+        if (dispoResult?.success === true) {
+          setCurrentCall(null);
+          setCurrentCallUUID(null);
+          setIncomingCall(null);
+          setShouldDisposition(false);
 
-        toast.success('Call dispositioned.');
-        return true;
-      } else {
-        console.error('Failed to disposition call: ', JSON.stringify(dispoResult?.data || {}));
+          toast.success('Call dispositioned.');
+          return true;
+        } else {
+          console.error('Failed to disposition call: ', JSON.stringify(dispoResult?.data || {}));
+          toast.error('Failed to save disposition');
+          return false;
+        }
+
+      } catch (error) {
+        console.error('Error saving disposition:', error);
         toast.error('Failed to save disposition');
         return false;
       }
+    } else {
+          //Attempted patch for super short calls.
 
-    } catch (error) {
-      console.error('Error saving disposition:', error);
-      toast.error('Failed to save disposition');
-      return false;
+          setCurrentCall(null);
+          setCurrentCallUUID(null);
+          setIncomingCall(null);
+          setShouldDisposition(false);
+          return true;
     }
   }, [currentCallUUID])
 
@@ -508,16 +518,16 @@ const connectWebSocket = useCallback(async () => {
   }, [pbxDetails, shouldDisposition]);
 
   useEffect(() => {
-  callAnsweredSoundRef.current = new Audio('/incoming-call.mp3');
-  callAnsweredSoundRef.current.volume = 0.8;
-  
-  return () => {
-    if (callAnsweredSoundRef.current) {
-      callAnsweredSoundRef.current.pause();
-      callAnsweredSoundRef.current = null;
-    }
-  };
-}, []);
+    callAnsweredSoundRef.current = new Audio('/incoming-call.mp3');
+    callAnsweredSoundRef.current.volume = 0.8;
+
+    return () => {
+      if (callAnsweredSoundRef.current) {
+        callAnsweredSoundRef.current.pause();
+        callAnsweredSoundRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     requestAudioPermissions();
@@ -660,9 +670,6 @@ const connectWebSocket = useCallback(async () => {
         const callUUID = session?.request?.getHeader('X-Call-UUID') || null;
         setCurrentCallUUID(callUUID)
         console.log('Call UUID:', callUUID);
-
-
-
 
         if (queueName && callerNumber) {
 
