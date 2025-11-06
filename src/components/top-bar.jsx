@@ -57,9 +57,9 @@ export function TopBar() {
   const [deviceSettingsOpen, setDeviceSettingsOpen] = useState(false);
   const [version, setVersion] = useState('Loading...');
 
-   useEffect(() => {
-    window.electron.getAppVersion().then(setVersion);
-  }, []);
+  //  useEffect(() => {
+  //   window.electron.getAppVersion().then(setVersion);
+  // }, []);
 
 
 
