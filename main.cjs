@@ -1,4 +1,5 @@
-const { app, BrowserWindow, session } = require('electron');
+const { app, BrowserWindow, session, ipcMain } = require('electron');
+const packageJson = require('./package.json');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
 
@@ -52,6 +53,10 @@ function createUpdateWindow() {
   updateWindow.loadFile('update.html');
 }
 
+ipcMain.handle('get-app-version', () => {
+  return packageJson.version;
+});
+
 // Create main window
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -60,7 +65,7 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, 'public/preload.js'),
+      preload: path.join(__dirname, 'preload.js'),
       enableRemoteModule: true
     },
     show: false

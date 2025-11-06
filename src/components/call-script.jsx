@@ -9,6 +9,12 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@/components/ui/tabs';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -40,7 +46,8 @@ import {
   AlertTriangle,
   Plus,
   X,
-  Loader2
+  Loader2,
+  Info
 } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
@@ -117,7 +124,7 @@ export default function CallScript() {
     account_number: '',
     selected_product: '',
     frequency: 'Monthly',
-    charge_date: new Date().toLocaleDateString('en-US', {year: 'numeric', month: 'long', day: 'numeric'}),
+    charge_date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
     charge_amount: '$49.99'
   });
 
@@ -184,7 +191,7 @@ export default function CallScript() {
           frequency: foundProduct.billing_frequency
 
         }));
-      }else{
+      } else {
         setBillingInformation(prev => ({ ...prev, [name]: value }));
       }
     } else {
@@ -1191,56 +1198,56 @@ export default function CallScript() {
     }
   };
 
-useEffect(() => {
-  if (prevCallRef.current !== null && currentCall === null) {
-    // Reset all states
-    setCurrentSlideIndex(0);
-    setIsAccountVerified(false);
-    setIsSubscriptionCreated(false);
-    setDisclaimerAccepted(false);
-    setBillingInformation({
-      type: 'checking',
-      routing_number: '',
-      account_number: '',
-      selected_product: '',
-      frequency: 'Monthly',
-      charge_date: new Date().toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      }),
-      charge_amount: '$49.99'
-    });
-    setFormData({
-      first_name: '',
-      last_name: '',
-      email_address: '',
-      primary_phone: '',
-      secondary_phone: '',
-      contact_status: 'not_subscribed',
-      have_consent: false,
-      last_consent: '',
-      referral_source: '',
-      street_address_one: '',
-      street_address_two: '',
-      address_city: '',
-      address_state: '',
-      address_zip: '',
-      address_county: '',
-      conditions: [],
-      emergency_contacts: []
-    });
-    setNewEmergencyContact({
-      first_name: '',
-      last_name: '',
-      phone_number: '',
-      email_address: ''
-    });
-    setShowAddContact(false);
-  }
+  useEffect(() => {
+    if (prevCallRef.current !== null && currentCall === null) {
+      // Reset all states
+      setCurrentSlideIndex(0);
+      setIsAccountVerified(false);
+      setIsSubscriptionCreated(false);
+      setDisclaimerAccepted(false);
+      setBillingInformation({
+        type: 'checking',
+        routing_number: '',
+        account_number: '',
+        selected_product: '',
+        frequency: 'Monthly',
+        charge_date: new Date().toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        }),
+        charge_amount: '$49.99'
+      });
+      setFormData({
+        first_name: '',
+        last_name: '',
+        email_address: '',
+        primary_phone: '',
+        secondary_phone: '',
+        contact_status: 'not_subscribed',
+        have_consent: false,
+        last_consent: '',
+        referral_source: '',
+        street_address_one: '',
+        street_address_two: '',
+        address_city: '',
+        address_state: '',
+        address_zip: '',
+        address_county: '',
+        conditions: [],
+        emergency_contacts: []
+      });
+      setNewEmergencyContact({
+        first_name: '',
+        last_name: '',
+        phone_number: '',
+        email_address: ''
+      });
+      setShowAddContact(false);
+    }
 
-  prevCallRef.current = currentCall;
-}, [currentCall]);
+    prevCallRef.current = currentCall;
+  }, [currentCall]);
 
   return (
     <div className="h-full flex flex-col">
@@ -1256,6 +1263,239 @@ useEffect(() => {
             </div>
           )}
         </div>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              size="icon"
+              className="absolute bottom-23 right-5 h-12 w-12 rounded-full shadow-lg hover:shadow-xl transition-shadow z-50"
+            >
+              <Info className="h-5 w-5" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent
+            className="w-96 max-h-[700px] overflow-y-auto p-0"
+            align="end"
+            side="top"
+          >
+            <Tabs defaultValue="customer" className="w-full">
+              <div className="border-b bg-background sticky top-0 z-10">
+                <TabsList className="w-full grid grid-cols-3 rounded-none h-auto p-0">
+                  <TabsTrigger
+                    value="customer"
+                    className="rounded-none"
+                  >
+                    Customer
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="pricing"
+                    className="rounded-none"
+                  >
+                    Pricing
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="company"
+                    className="rounded-none"
+                  >
+                    Company
+                  </TabsTrigger>
+                </TabsList>
+              </div>
+              <TabsContent value="customer" className="p-4 pt-0 space-y-4 mt-0">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold text-lg">Customer Information</h3>
+                  <Badge variant={formData.contact_status === 'subscribed' ? 'default' : 'secondary'}>
+                    {formData.contact_status?.replace('_', ' ')}
+                  </Badge>
+                </div>
+                <div className="space-y-3">
+                  <h4 className="font-medium text-sm text-muted-foreground uppercase">Personal Details</h4>
+                  <div className="space-y-2 text-sm">
+                    <div>
+                      <span className="font-medium">Name:</span>
+                      <p className="text-muted-foreground">
+                        {formData.first_name} {formData.last_name || 'N/A'}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="font-medium">Primary Phone:</span>
+                      <p className="text-muted-foreground">{formData.primary_phone || 'N/A'}</p>
+                    </div>
+                    {formData.secondary_phone && (
+                      <div>
+                        <span className="font-medium">Secondary Phone:</span>
+                        <p className="text-muted-foreground">{formData.secondary_phone}</p>
+                      </div>
+                    )}
+                    <div>
+                      <span className="font-medium">Email:</span>
+                      <p className="text-muted-foreground break-all">{formData.email_address || 'N/A'}</p>
+                    </div>
+                  </div>
+                </div>
+                {formData.street_address_one && (
+                  <>
+                    <Separator />
+                    <div className="space-y-3">
+                      <h4 className="font-medium text-sm text-muted-foreground uppercase">Address</h4>
+                      <div className="text-sm text-muted-foreground">
+                        <p>{formData.street_address_one}</p>
+                        {formData.street_address_two && <p>{formData.street_address_two}</p>}
+                        <p>
+                          {formData.address_city}, {formData.address_state} {formData.address_zip}
+                        </p>
+                        {formData.address_county && <p>{formData.address_county} County</p>}
+                      </div>
+                    </div>
+                  </>
+                )}
+                {formData.conditions && formData.conditions.length > 0 && (
+                  <>
+                    <Separator />
+                    <div className="space-y-3">
+                      <h4 className="font-medium text-sm text-muted-foreground uppercase">
+                        Chronic Conditions ({formData.conditions.length})
+                      </h4>
+                      <div className="flex flex-wrap gap-2">
+                        {formData.conditions.map(condition => (
+                          <Badge key={condition} variant="secondary" className="text-xs">
+                            {condition}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+                {formData.emergency_contacts && formData.emergency_contacts.length > 0 && (
+                  <>
+                    <Separator />
+                    <div className="space-y-3">
+                      <h4 className="font-medium text-sm text-muted-foreground uppercase">
+                        Emergency Contacts ({formData.emergency_contacts.length})
+                      </h4>
+                      <div className="space-y-3">
+                        {formData.emergency_contacts.map((contact, idx) => (
+                          <div key={idx} className="p-2 bg-muted/50 rounded-md text-sm">
+                            <p className="font-medium">
+                              {contact.first_name} {contact.last_name}
+                            </p>
+                            {contact.phone_number && (
+                              <p className="text-muted-foreground text-xs">{contact.phone_number}</p>
+                            )}
+                            {contact.email_address && (
+                              <p className="text-muted-foreground text-xs break-all">{contact.email_address}</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+                {formData.have_consent && (
+                  <>
+                    <Separator />
+                    <div className="space-y-2">
+                      <h4 className="font-medium text-sm text-muted-foreground uppercase">Consent</h4>
+                      <div className="flex items-center gap-2">
+                        <CheckSquare className="h-4 w-4 text-green-600" />
+                        <span className="text-sm">Consent provided</span>
+                      </div>
+                      {formData.last_consent && (
+                        <p className="text-xs text-muted-foreground">
+                          Last: {new Date(formData.last_consent).toLocaleDateString()}
+                        </p>
+                      )}
+                    </div>
+                  </>
+                )}
+              </TabsContent>
+              <TabsContent value="pricing" className="p-4 pt-0 space-y-4 mt-0">
+                <h3 className="font-semibold text-lg">Pricing Information</h3>
+
+                {productOfferings && productOfferings.length > 0 ? (
+                  <div className="space-y-3">
+                    {productOfferings.map((product) => (
+                      <div
+                        key={product.internal_product_id}
+                        className="border rounded-lg p-3 space-y-2"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <p className="font-semibold">{product.friendly_name}</p>
+                            {product.description && (
+                              <p className="text-xs text-muted-foreground mt-1">{product.description}</p>
+                            )}
+                          </div>
+                          {product.price && (
+                            <div className="text-right ml-3">
+                              <p className="text-lg font-bold text-emerald-600">${product.price}</p>
+                              {product.billing_frequency && (
+                                <p className="text-xs text-muted-foreground">/{product.billing_frequency}</p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-8">
+                    No pricing information available
+                  </p>
+                )}
+
+                {billingInformation.selected_product && (
+                  <>
+                    <Separator />
+                    <div className="space-y-2">
+                      <h4 className="font-medium text-sm text-muted-foreground uppercase">Current Selection</h4>
+                      <div className="bg-primary/5 border border-primary/20 rounded-lg p-3">
+                        <p className="text-sm font-medium">
+                          {productOfferings?.find(p => p.internal_product_id === billingInformation.selected_product)?.friendly_name || 'N/A'}
+                        </p>
+                        <p className="text-lg font-bold text-primary mt-1">
+                          {billingInformation.charge_amount}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Billed {billingInformation.frequency}
+                        </p>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </TabsContent>
+              <TabsContent value="company" className="p-4 pt-0 space-y-4 mt-0">
+                <h3 className="font-semibold text-lg">Company Information</h3>
+
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <h4 className="font-medium text-sm text-muted-foreground uppercase">Support Hours</h4>
+                    <p className="text-sm text-muted-foreground">
+                      Monday - Friday: 9:00 AM - 5:00 PM EST<br />
+                      Saturday: Closed<br />
+                      Sunday: Closed
+                    </p>
+                  </div>
+
+                  <Separator />
+
+                  <div className="space-y-2">
+                    <h4 className="font-medium text-sm text-muted-foreground uppercase">Contact</h4>
+                    <p className="text-sm text-muted-foreground">
+                      Support: (833) 435-5402<br />
+                      Email: support@lifeshieldmedicalalerts.com<br />
+                      Web: www.lifeshieldmedicalalerts.com
+                    </p>
+                  </div>
+                </div>
+              </TabsContent>
+            </Tabs>
+            <div className="bg-muted border-t px-4 py-2 text-center">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Sale Callback Number</p>
+              <p className="text-xs font-medium">(888) 883-4603</p>
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
       <div className="p-6 pt-4 border-t">
         <div className="flex items-center justify-between">
@@ -1316,6 +1556,7 @@ useEffect(() => {
           </Button>
         </div>
       </div>
+
     </div>
   );
 }

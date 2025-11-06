@@ -1,7 +1,7 @@
 {
   "name": "crm",
   "private": true,
-  "version": "0.0.5",
+  "version": "0.0.6",
   "type": "module",
   "main": "main.cjs",
   "homepage": "./",
@@ -15,7 +15,7 @@
     "electron:build": "npm run electron:clean && vite build && electron-builder",
     "electron:preview": "electron ."
   },
-"dependencies": {
+  "dependencies": {
     "@aws-amplify/auth": "^6.15.1",
     "@aws-amplify/core": "^6.13.2",
     "@aws-sdk/client-cognito-identity-provider": "^3.894.0",
@@ -28,6 +28,7 @@
     "@radix-ui/react-select": "^2.2.6",
     "@radix-ui/react-separator": "^1.1.7",
     "@radix-ui/react-slot": "^1.2.3",
+    "@radix-ui/react-tabs": "^1.1.13",
     "@signalwire/js": "^3.29.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -62,50 +63,54 @@
     "vite": "^7.1.2",
     "wait-on": "^8.0.4"
   },
-"build": {
-  "appId": "com.lifeshield.crm",
-  "productName": "LifeShield CRM",
-  "files": [
-    "dist/**/*",
-    "main.cjs",
-    "update.html",
-    "public/preload.js",
-    "node_modules/**/*",
-    "!node_modules/@tailwindcss/oxide*"
-  ],
-  "asarUnpack": [
-    "node_modules/electron-updater/**/*"
-  ],
-  "directories": {
-    "buildResources": "build",
-    "output": "release"
-  },
-  "mac": {
-    "category": "public.app-category.productivity",
-    "target": ["dmg"],
-    "icon": "build/icon.icns",
-    "identity": null,
-    "hardenedRuntime": false,
-    "gatekeeperAssess": false
-  },
-  "win": {
-    "target": [
-      {
-        "target": "nsis",
-        "arch": ["x64"]
-      }
+  "build": {
+    "appId": "com.lifeshield.crm",
+    "productName": "LifeShield CRM",
+    "files": [
+      "dist/**/*",
+      "main.cjs",
+      "update.html",
+      "public/preload.js",
+      "node_modules/**/*",
+      "!node_modules/@tailwindcss/oxide*"
     ],
-    "icon": "build/icon.ico"
-  },
-  "publish": {
-    "provider": "github",
-    "owner": "LifeShieldMedicalAlerts",
-    "repo": "crm",
-    "releaseType": "release"
-  },
-  "nsis": {
-    "oneClick": false,
-    "allowToChangeInstallationDirectory": true
+    "asarUnpack": [
+      "node_modules/electron-updater/**/*"
+    ],
+    "directories": {
+      "buildResources": "build",
+      "output": "release"
+    },
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        "dmg"
+      ],
+      "icon": "build/icon.icns",
+      "identity": null,
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "LifeShieldMedicalAlerts",
+      "repo": "crm",
+      "releaseType": "release"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
   }
-}
 }

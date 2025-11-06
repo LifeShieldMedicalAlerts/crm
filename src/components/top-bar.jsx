@@ -12,6 +12,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator
 } from "@/components/ui/dropdown-menu"
 import { 
   PhoneOff, 
@@ -54,6 +55,11 @@ export function TopBar() {
     formattedStateTime
   } = useContactCenter();
   const [deviceSettingsOpen, setDeviceSettingsOpen] = useState(false);
+  const [version, setVersion] = useState('Loading...');
+
+   useEffect(() => {
+    window.electron.getAppVersion().then(setVersion);
+  }, []);
 
 
 
@@ -96,7 +102,6 @@ export function TopBar() {
     <>
     <div className="w-full h-auto py-3 px-6 shadow-md bg-background border-b">
       <div className="flex items-center justify-between">
-        {/* Left Section - Agent State */}
         <div className="flex items-center space-x-4">
           <Select value={pbxDetails?.status} onValueChange={handleStateChange}>
             <SelectTrigger className="w-32">
@@ -130,8 +135,6 @@ export function TopBar() {
               </div>
             </div>
         </div>
-
-        {/* Middle Section - Call Controls */}
         <div className="flex items-center space-x-4">
           {pbxDetails?.uuid && (
             <div className="flex items-center space-x-4 bg-muted/50 px-4 py-1 rounded-lg">
@@ -161,38 +164,38 @@ export function TopBar() {
             </div>
           )}
         </div>
-
-        {/* Right Section - Agent Info & Menu */}
         <div className="flex items-center space-x-3">
-          {/* Agent Status Indicator */}
           <div className="flex items-center space-x-2">
             <div className={`w-2 h-2 rounded-full`}></div>
             <span className="text-sm text-muted-foreground">
               {sipState === 'registered' ? 'Online' : 'Connecting...'}
             </span>
           </div>
-          {/* Agent Info */}
           <div className="text-right">
             <div className="text-sm font-medium">{dbUser?.first_name} {dbUser?.last_name}</div>
           </div>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon">
-                <Menu className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-             <DropdownMenuItem onClick={() => setDeviceSettingsOpen(true)}>
-            <Settings className="h-4 w-4 mr-2" />
-            Settings
-          </DropdownMenuItem>
-              <DropdownMenuItem onClick={attemptLogout} className="text-red-600">
-                <LogOut className="h-4 w-4 mr-2" />
-                Log Out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+      <DropdownMenu>
+  <DropdownMenuTrigger asChild>
+    <Button variant="outline" size="icon">
+      <Menu className="h-4 w-4" />
+    </Button>
+  </DropdownMenuTrigger>
+  <DropdownMenuContent align="end" className="w-48">
+    <DropdownMenuItem onClick={() => setDeviceSettingsOpen(true)}>
+      <Settings className="h-4 w-4 mr-2" />
+      Settings
+    </DropdownMenuItem>
+    <DropdownMenuItem onClick={attemptLogout} className="text-red-600">
+      <LogOut className="h-4 w-4 mr-2" />
+      Log Out
+    </DropdownMenuItem>
+    <DropdownMenuSeparator />
+    <div className="px-2 py-1.5 text-xs text-muted-foreground text-center">
+      v{version}
+    </div>
+  </DropdownMenuContent>
+</DropdownMenu>
         </div>
       </div>
     </div>
