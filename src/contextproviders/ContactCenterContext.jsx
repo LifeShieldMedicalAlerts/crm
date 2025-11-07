@@ -30,7 +30,8 @@ export function ContactCenterProvider({ children }) {
   const [pbxDetails, setPBXDetails] = useState(null);
   const [wsConnected, setWsConnected] = useState(false);
 
-  const [currentCallUUID, setCurrentCallUUID] = useState(null)
+  const [currentCallUUID, setCurrentCallUUID] = useState(null);
+  const [currentQueueName, setCurrentQueueName] = useState(null);
 
   const [shouldDisposition, setShouldDisposition] = useState(false);
   const [scriptData, setScriptData] = useState(null);
@@ -176,10 +177,16 @@ export function ContactCenterProvider({ children }) {
     }
   }, [currentCall]);
 
-  const updateCustomerData = async ({ data }) => {
+  const updateCustomerData = useCallback(async ({ data }) => {
     console.log('recieved data ', data);
-    const updateResult = await customerApi.execute('/customer/update', 'POST', data);
-  }
+    if(currentQueueName && currentQueueName !== 'training@sip.lifeshieldmedicalalerts.com'){
+      const updateResult = await customerApi.execute('/customer/update', 'POST', data);
+    }else{
+      //overwrite all server requests for training calls
+      return true;
+    }
+    
+  },[currentQueueName])
 
   const debouncedUpdate = useDebounce(updateCustomerData, 500);
 
@@ -452,6 +459,7 @@ export function ContactCenterProvider({ children }) {
         if (dispoResult?.success === true) {
           setCurrentCall(null);
           setCurrentCallUUID(null);
+          setCurrentQueueName(null);
           setIncomingCall(null);
           setShouldDisposition(false);
 
@@ -473,6 +481,7 @@ export function ContactCenterProvider({ children }) {
 
           setCurrentCall(null);
           setCurrentCallUUID(null);
+          setCurrentQueueName(null);
           setIncomingCall(null);
           setShouldDisposition(false);
           return true;
@@ -669,6 +678,7 @@ export function ContactCenterProvider({ children }) {
         console.log('Queue name:', queueName);
         const callUUID = session?.request?.getHeader('X-Call-UUID') || null;
         setCurrentCallUUID(callUUID)
+        setCurrentQueueName(queueName);
         console.log('Call UUID:', callUUID);
 
         if (queueName && callerNumber) {
@@ -938,7 +948,8 @@ export function ContactCenterProvider({ children }) {
     matchedContacts,
     customerData,
     updateCustomerData,
-    debouncedUpdate
+    debouncedUpdate,
+    currentQueueName
 
   };
 

@@ -87,7 +87,7 @@ const formatPhoneNumber = (value) => {
 
 export default function CallScript() {
   const { dbUser } = useAuth();
-  const { scriptData, customerData, productOfferings, debouncedUpdate, currentCall } = useContactCenter();
+  const { scriptData, customerData, productOfferings, debouncedUpdate, currentCall, currentQueueName } = useContactCenter();
   const paymentApi = useApi();
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -164,13 +164,6 @@ export default function CallScript() {
     }
   }, [currentSlideIndex]);
 
-  const formatDate = (date = new Date()) => {
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    });
-  };
 
 
   const handleFieldChange = (name, value) => {
@@ -288,60 +281,84 @@ export default function CallScript() {
     }
 
     setIsVerifying(true);
-    const verificationResult = await paymentApi.execute('/billing/verifyaccount', 'POST', {
-      customerInformation: formData,
-      paymentInformation: billingInformation
-    });
 
-
-    setIsVerifying(false);
-
-    if (verificationResult.success === true) {
-      setIsAccountVerified(true);
-      toast.success('Account verified successfully!');
-      return true;
-    } else {
-      toast.error('Invalid Payment Method', {
-        description: verificationResult?.data?.reason || 'Please double check routing and account number.'
+    if (currentQueueName && currentQueueName !== 'training@sip.lifeshieldmedicalalerts.com') {
+      const verificationResult = await paymentApi.execute('/billing/verifyaccount', 'POST', {
+        customerInformation: formData,
+        paymentInformation: billingInformation
       });
-      return false;
+
+      setIsVerifying(false);
+
+      if (verificationResult.success === true) {
+        setIsAccountVerified(true);
+        toast.success('Account verified successfully!');
+        return true;
+      } else {
+        toast.error('Invalid Payment Method', {
+          description: verificationResult?.data?.reason || 'Please double check routing and account number.'
+        });
+        return false;
+      }
+    } else {
+      await new Promise(resolve => setTimeout(resolve, 4000));
+      const success = Math.random() < 0.8; //set an 80% chance of success
+      setIsVerifying(false);
+      if (success) {
+        setIsAccountVerified(true);
+        toast.success('Account verified successfully!');
+        return true;
+      } else {
+        toast.error('Invalid Payment Method', {
+          description: verificationResult?.data?.reason || 'Please double check routing and account number.'
+        });
+        return false;
+      }
     }
-  }, [billingInformation, formData, paymentApi]);
+  }, [billingInformation, formData, paymentApi, currentQueueName]);
 
   const createSubscription = useCallback(async () => {
     setIsCreatingSubscription(true);
 
-    try {
-      const filteredBilling = billingInformation;
-      delete filteredBilling.charge_amount;
-      delete filteredBilling.charge_date;
-      const result = await paymentApi.execute('/billing/subscribecustomer', 'POST', {
-        customerInformation: formData?.customer_id,
-        paymentInformation: filteredBilling
-      });
+    if (currentQueueName && currentQueueName !== 'training@sip.lifeshieldmedicalalerts.com') {
+      try {
+        const filteredBilling = billingInformation;
+        delete filteredBilling.charge_amount;
+        delete filteredBilling.charge_date;
+        const result = await paymentApi.execute('/billing/subscribecustomer', 'POST', {
+          customerInformation: formData?.customer_id,
+          paymentInformation: filteredBilling
+        });
 
-      setIsCreatingSubscription(false);
-      toast.success('Subscription created successfully!');
-      return true;
-
-      if (result.success) {
-        setIsSubscriptionCreated(true);
+        setIsCreatingSubscription(false);
         toast.success('Subscription created successfully!');
         return true;
-      } else {
-        toast.error('Failed to create subscription', {
-          description: result?.data?.reason || 'Please try again.'
+
+        if (result.success) {
+          setIsSubscriptionCreated(true);
+          toast.success('Subscription created successfully!');
+          return true;
+        } else {
+          toast.error('Failed to create subscription', {
+            description: result?.data?.reason || 'Please try again.'
+          });
+          return false;
+        }
+      } catch (error) {
+        setIsCreatingSubscription(false);
+        toast.error('An error occurred', {
+          description: 'Please try again later.'
         });
         return false;
       }
-    } catch (error) {
+    } else {
+      //simulate subscription processing for training
+      await new Promise(resolve => setTimeout(resolve, 4000));
       setIsCreatingSubscription(false);
-      toast.error('An error occurred', {
-        description: 'Please try again later.'
-      });
-      return false;
+      toast.success('Subscription created successfully!');
+      return true;
     }
-  }, [formData, billingInformation, paymentApi]);
+  }, [formData, billingInformation, paymentApi, currentQueueName]);
 
   // Check if current slide has billing fields
   const hasBillingFields = () => {
@@ -475,10 +492,11 @@ export default function CallScript() {
   }, [customerData, billingInformation, dbUser]);
 
   const renderContent = (content, index) => {
+    const contentKey = `${content.type}-${index}`;
     switch (content.type) {
       case 'script':
         return (
-          <Card key={index} className="border-l-4 border-l-blue-500">
+          <Card key={contentKey} className="border-l-4 border-l-blue-500">
             <CardContent>
               <div className="flex gap-3">
                 <MessageSquare className="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" />
@@ -490,7 +508,7 @@ export default function CallScript() {
 
       case 'question':
         return (
-          <Card key={index} className="border-l-4 border-l-purple-500 bg-purple-50/50">
+          <Card key={contentKey} className="border-l-4 border-l-purple-500 bg-purple-50/50">
             <CardContent>
               <div className="flex gap-3">
                 <HelpCircle className="h-5 w-5 text-purple-500 flex-shrink-0 mt-0.5" />
@@ -502,11 +520,11 @@ export default function CallScript() {
 
       case 'form_fields':
         return (
-          <Card key={index} className="border-l-4 border-l-green-500">
+          <Card key={contentKey} className="border-l-4 border-l-green-500">
             <CardContent>
               <div className="space-y-4">
                 {content.fields?.map((field, fieldIndex) => (
-                  <div key={fieldIndex} className="space-y-2">
+                  <div key={`${index}-form-field-${fieldIndex}`} className="space-y-2">
                     <Label htmlFor={field.name}>
                       {field.label}
                       {field.required && <span className="text-red-500 ml-1">*</span>}
@@ -551,11 +569,11 @@ export default function CallScript() {
 
       case 'billing_fields':
         return (
-          <Card key={index} className="border-l-4 border-l-emerald-500">
+          <Card key={contentKey} className="border-l-4 border-l-emerald-500">
             <CardContent>
               <div className="space-y-4">
                 {content.fields?.map((field, fieldIndex) => (
-                  <div key={fieldIndex} className="space-y-2">
+                  <div key={`${index}-billing-field-${fieldIndex}`} className="space-y-2">
                     <Label htmlFor={field.name}>
                       {field.label}
                       {field.required && <span className="text-red-500 ml-1">*</span>}
@@ -569,8 +587,8 @@ export default function CallScript() {
                           <SelectValue placeholder={field.placeholder || 'Select...'} />
                         </SelectTrigger>
                         <SelectContent>
-                          {field.options?.map(option => (
-                            <SelectItem key={option.value} value={option.value}>
+                          {field.options?.map((option, optIndex) => (
+                            <SelectItem key={`${index}-billing-option-${fieldIndex}-${optIndex}`} value={option.value}>
                               {option.label}
                             </SelectItem>
                           ))}
@@ -617,7 +635,7 @@ export default function CallScript() {
 
       case 'chronic_conditions_selector':
         return (
-          <Card key={index} className="border-l-4 border-l-teal-500">
+          <Card key={contentKey} className="border-l-4 border-l-teal-500">
             <CardContent className="space-y-4">
               <Label>{content.label || 'Chronic Conditions'}</Label>
               <Popover>
@@ -630,15 +648,15 @@ export default function CallScript() {
                 </PopoverTrigger>
                 <PopoverContent className="w-[400px] p-0" align="start">
                   <div className="max-h-[300px] overflow-y-auto p-4 space-y-2">
-                    {CHRONIC_CONDITIONS.map(condition => (
-                      <div key={condition} className="flex items-center space-x-2">
+                    {CHRONIC_CONDITIONS.map((condition, condIdx) => (
+                      <div key={`${index}-condition-${condIdx}`} className="flex items-center space-x-2">
                         <Checkbox
-                          id={condition}
+                          id={`${index}-${condition}`}
                           checked={formData?.conditions?.includes(condition)}
                           onCheckedChange={() => toggleCondition(condition)}
                         />
                         <label
-                          htmlFor={condition}
+                          htmlFor={`${index}-${condition}`}
                           className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1"
                         >
                           {condition}
@@ -651,8 +669,8 @@ export default function CallScript() {
 
               {formData?.conditions?.length > 0 && (
                 <div className="flex flex-wrap gap-2">
-                  {formData?.conditions?.map(condition => (
-                    <Badge key={condition} variant="secondary" className="pl-2 pr-1">
+                  {formData?.conditions?.map((condition, condIdx) => (
+                    <Badge key={`${index}-selected-condition-${condIdx}`} variant="secondary" className="pl-2 pr-1">
                       {condition}
                       <button
                         type="button"
@@ -671,11 +689,11 @@ export default function CallScript() {
 
       case 'address_form':
         return (
-          <Card key={index} className="border-l-4 border-l-indigo-500">
+          <Card key={contentKey} className="border-l-4 border-l-indigo-500">
             <CardContent>
               <div className="space-y-4">
                 {content.fields?.map((field, fieldIndex) => (
-                  <div key={fieldIndex} className="space-y-2">
+                  <div key={`${index}-address-field-${fieldIndex}`} className="space-y-2">
                     <Label htmlFor={field.name}>
                       {field.label}
                       {field.required && <span className="text-red-500 ml-1">*</span>}
@@ -689,8 +707,8 @@ export default function CallScript() {
                           <SelectValue placeholder="Select state" />
                         </SelectTrigger>
                         <SelectContent>
-                          {field.options?.map(option => (
-                            <SelectItem key={option} value={option}>
+                          {field.options?.map((option, optIndex) => (
+                            <SelectItem key={`${index}-address-option-${fieldIndex}-${optIndex}`} value={option}>
                               {option}
                             </SelectItem>
                           ))}
@@ -717,7 +735,7 @@ export default function CallScript() {
 
       case 'emergency_contacts_manager':
         return (
-          <Card key={index} className="border-l-4 border-l-orange-500">
+          <Card key={contentKey} className="border-l-4 border-l-orange-500">
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
                 <Label>{content.label || 'Emergency Contacts'}</Label>
@@ -806,7 +824,7 @@ export default function CallScript() {
               {formData.emergency_contacts.length > 0 && (
                 <Accordion type="single" collapsible className="w-full">
                   {formData.emergency_contacts.map((contact, idx) => (
-                    <AccordionItem key={idx} value={`contact-${idx}`}>
+                    <AccordionItem key={`${index}-contact-${idx}`} value={`contact-${index}-${idx}`}>
                       <AccordionTrigger className="hover:no-underline">
                         <div className="flex items-center justify-between w-full pr-4">
                           <span className="font-medium">
@@ -886,7 +904,7 @@ export default function CallScript() {
 
       case 'verification_display':
         return (
-          <Card key={index} className="border-l-4 border-l-blue-500">
+          <Card key={contentKey} className="border-l-4 border-l-blue-500">
             <CardHeader>
               <CardTitle>Customer Information Summary</CardTitle>
             </CardHeader>
@@ -920,7 +938,7 @@ export default function CallScript() {
 
       case 'name_verification_display':
         return (
-          <Card key={index} className="border-l-4 border-l-purple-500 bg-purple-50/50">
+          <Card key={contentKey} className="border-l-4 border-l-purple-500 bg-purple-50/50">
             <CardContent>
               <div className="text-center space-y-2">
                 <p className="text-sm text-muted-foreground">Customer Name on File:</p>
@@ -934,7 +952,7 @@ export default function CallScript() {
 
       case 'checklist':
         return (
-          <Card key={index} className="border-l-4 border-l-green-500">
+          <Card key={contentKey} className="border-l-4 border-l-green-500">
             <CardContent>
               <div className="flex gap-3">
                 <CheckSquare className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
@@ -944,7 +962,7 @@ export default function CallScript() {
                   )}
                   <ul className="space-y-2">
                     {content.items?.map((item, idx) => (
-                      <li key={idx} className="flex items-start gap-2">
+                      <li key={`${index}-checklist-${idx}`} className="flex items-start gap-2">
                         <span className="text-green-500 mt-1">•</span>
                         <span>{item}</span>
                       </li>
@@ -958,7 +976,7 @@ export default function CallScript() {
 
       case 'product_selector':
         return (
-          <Card key={index} className="border-l-4 border-l-indigo-500">
+          <Card key={contentKey} className="border-l-4 border-l-indigo-500">
             <CardContent className="space-y-4">
               <Label>
                 {content.label || 'Select Product'}
@@ -969,7 +987,7 @@ export default function CallScript() {
                 <div className="grid gap-3">
                   {productOfferings.map((product) => (
                     <div
-                      key={product.internal_product_id}
+                      key={`${index}-product-${product.internal_product_id}`}
                       className={`
                   border-2 rounded-lg p-4 cursor-pointer transition-all
                   ${billingInformation.selected_product === product.internal_product_id
@@ -1020,7 +1038,7 @@ export default function CallScript() {
 
       case 'subscription_authorization':
         return (
-          <Card key={index} className="border-l-4 border-l-purple-500">
+          <Card key={contentKey} className="border-l-4 border-l-purple-500">
             <CardContent className="space-y-4">
               <Label className="text-base font-semibold">Authorization Disclaimer</Label>
 
@@ -1055,7 +1073,7 @@ export default function CallScript() {
 
       case 'note':
         return (
-          <Card key={index} className="border-l-4 border-l-yellow-500 bg-yellow-50/50">
+          <Card key={contentKey} className="border-l-4 border-l-yellow-500 bg-yellow-50/50">
             <CardContent>
               <div className="flex gap-3">
                 <AlertCircle className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
@@ -1067,7 +1085,7 @@ export default function CallScript() {
 
       case 'tip':
         return (
-          <Card key={index} className="border-l-4 border-l-cyan-500 bg-cyan-50/50">
+          <Card key={contentKey} className="border-l-4 border-l-cyan-500 bg-cyan-50/50">
             <CardContent>
               <div className="flex gap-3">
                 <Lightbulb className="h-5 w-5 text-cyan-500 flex-shrink-0 mt-0.5" />
@@ -1079,7 +1097,7 @@ export default function CallScript() {
 
       case 'statistics':
         return (
-          <Card key={index}>
+          <Card key={contentKey}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <TrendingUp className="h-5 w-5" />
@@ -1088,7 +1106,7 @@ export default function CallScript() {
             </CardHeader>
             <CardContent className="space-y-4">
               {content.items?.map((stat, idx) => (
-                <div key={idx} className="space-y-2">
+                <div key={`${index}-stat-${idx}`} className="space-y-2">
                   <Badge variant="outline" className="mb-2">{stat.condition}</Badge>
                   <p className="text-sm leading-relaxed">{stat.stat}</p>
                   <p className="text-xs text-muted-foreground">Source: {stat.source}</p>
@@ -1101,7 +1119,7 @@ export default function CallScript() {
 
       case 'stories':
         return (
-          <Card key={index}>
+          <Card key={contentKey}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <BookOpen className="h-5 w-5" />
@@ -1110,7 +1128,7 @@ export default function CallScript() {
             </CardHeader>
             <CardContent className="space-y-4">
               {content.items?.map((story, idx) => (
-                <div key={idx} className="space-y-2">
+                <div key={`${index}-story-${idx}`} className="space-y-2">
                   <Badge variant="secondary">{story.condition}</Badge>
                   <p className="text-sm leading-relaxed italic">{story.story}</p>
                   {idx < content.items.length - 1 && <Separator className="mt-4" />}
@@ -1122,7 +1140,7 @@ export default function CallScript() {
 
       case 'pricing':
         return (
-          <Card key={index} className="border-l-4 border-l-emerald-500">
+          <Card key={contentKey} className="border-l-4 border-l-emerald-500">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <DollarSign className="h-5 w-5 text-emerald-500" />
@@ -1131,7 +1149,7 @@ export default function CallScript() {
             </CardHeader>
             <CardContent className="space-y-4">
               {content.options?.map((option, idx) => (
-                <div key={idx} className="p-4 bg-muted/50 rounded-lg">
+                <div key={`${index}-pricing-${idx}`} className="p-4 bg-muted/50 rounded-lg">
                   <div className="font-semibold text-lg">{option.plan}</div>
                   <div className="text-xl font-bold text-emerald-600 mt-1">{option.price}</div>
                   {option.details && (
@@ -1145,7 +1163,7 @@ export default function CallScript() {
 
       case 'objection':
         return (
-          <Card key={index} className="border-l-4 border-l-orange-500 bg-orange-50/50">
+          <Card key={contentKey} className="border-l-4 border-l-orange-500 bg-orange-50/50">
             <CardContent className="space-y-3">
               <div className="flex gap-3">
                 <AlertTriangle className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
@@ -1162,7 +1180,7 @@ export default function CallScript() {
 
       case 'objections':
         return (
-          <Card key={index}>
+          <Card key={contentKey}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <AlertTriangle className="h-5 w-5 text-orange-500" />
@@ -1171,7 +1189,7 @@ export default function CallScript() {
             </CardHeader>
             <CardContent className="space-y-4">
               {content.items?.map((obj, idx) => (
-                <div key={idx} className="space-y-2 p-4 bg-orange-50/50 rounded-lg">
+                <div key={`${index}-objection-${idx}`} className="space-y-2 p-4 bg-orange-50/50 rounded-lg">
                   <Badge variant="outline" className="bg-white">{obj.category}</Badge>
                   <div>
                     <p className="font-medium text-sm mb-1">"{obj.objection}"</p>
@@ -1187,7 +1205,7 @@ export default function CallScript() {
 
       default:
         return (
-          <Card key={index}>
+          <Card key={contentKey}>
             <CardContent>
               <pre className="whitespace-pre-wrap text-sm">
                 {JSON.stringify(content, null, 2)}
@@ -1511,7 +1529,7 @@ export default function CallScript() {
           <div className="flex gap-2">
             {scriptData.map((slide, index) => (
               <button
-                key={slide.slideId || index}
+                key={`slide-${index}-${slide.slideId || 'no-id'}`}
                 onClick={() => setCurrentSlideIndex(index)}
                 className={`h-2 rounded-full transition-all ${index === currentSlideIndex
                   ? 'w-8 bg-primary'

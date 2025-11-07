@@ -1,7 +1,7 @@
 {
   "name": "crm",
   "private": true,
-  "version": "0.0.7",
+  "version": "0.0.8",
   "type": "module",
   "main": "main.cjs",
   "homepage": "./",
@@ -70,7 +70,7 @@
       "dist/**/*",
       "main.cjs",
       "update.html",
-      "public/preload.js",
+      "preload.js",
       "node_modules/**/*",
       "!node_modules/@tailwindcss/oxide*"
     ],

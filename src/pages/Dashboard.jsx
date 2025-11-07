@@ -1,7 +1,6 @@
 import { useAuth } from "@/contextproviders/AuthContext";
 import { useContactCenter } from '../contextproviders/ContactCenterContext';
 import { TopBar } from "@/components/top-bar"
-import CustomerInformation from "@/components/customer-information";
 import CallScript from "@/components/call-script";
 import { Loader2, TriangleAlert } from "lucide-react"
 import { useEffect, useState, useCallback } from "react";

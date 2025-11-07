@@ -10,7 +10,6 @@ import { Toaster } from "@/components/ui/sonner"
 
 
 
-// Protected route component
 function ProtectedRoute() {
   const { isAuthenticated, loading } = useAuth();
   if (loading) {
@@ -19,7 +18,6 @@ function ProtectedRoute() {
   return isAuthenticated ? <Outlet /> : <Navigate to="/login" />;
 }
 
-// Public route component
 function PublicRoute() {
   const { isAuthenticated, loading } = useAuth();
   if (loading) {
@@ -34,20 +32,13 @@ function App() {
       <AuthProvider>
         <ContactCenterProvider>
           <Routes>
-            {/* Public routes */}
             <Route element={<PublicRoute />}>
               <Route path="/login" element={<Login />} />
             </Route>
-            
-            {/* Protected routes */}
             <Route element={<ProtectedRoute />}>
               <Route path="/dashboard" element={<Dashboard />} />
             </Route>
-            
-            {/* Redirect root to dashboard or login based on auth state */}
             <Route path="/" element={<Navigate to="/login" replace />} />
-            
-            {/* 404 route */}
             <Route path="*" element={<div>Page not found</div>} />
           </Routes>
         </ContactCenterProvider>
