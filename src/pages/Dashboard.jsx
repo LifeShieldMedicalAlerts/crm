@@ -4,6 +4,7 @@ import { TopBar } from "@/components/top-bar"
 import CallScript from "@/components/call-script";
 import { Loader2, TriangleAlert } from "lucide-react"
 import { useEffect, useState, useCallback } from "react";
+import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
@@ -23,18 +24,53 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 
 function Dashboard() {
-  const { user, dbUser, initError } = useAuth();
+  const { user, dbUser, initError, logout } = useAuth();
   const {
     sipState,
     sipError,
     currentCall,
     shouldDisposition,
     handleDisposition,
-    campaignSettings
+    campaignSettings,
+    updateStatus
   } = useContactCenter();
 
   const [selectedDisposition, setSelectedDisposition] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
+
+
+useEffect(() => {
+  const handleCheckCanClose = async () => {
+    if (currentCall || shouldDisposition) {
+      toast.error('Cannot close application', {
+        description: shouldDisposition 
+          ? 'Please disposition your call before closing.'
+          : 'Please end and disposition your call before closing.',
+        duration: 5000,
+      });
+      window?.electron?.respondCanClose(false);
+      return;
+    }
+    
+    setIsClosing(true);
+    try {
+      updateStatus('Logged Out');
+      await logout();
+      window?.electron?.respondCanClose(true);
+    } catch (error) {
+      console.error('Logout failed:', error);
+      window?.electron?.respondCanClose(true);
+    }
+  };
+
+  const cleanup = window?.electron?.onCheckCanClose(handleCheckCanClose);
+  
+  return cleanup;
+}, [currentCall, shouldDisposition, updateStatus, logout]);
+
+
+
 
   useEffect(() => {
     console.log("sipState ", sipState)
@@ -124,6 +160,9 @@ function Dashboard() {
 
   return (
     <>
+      {isClosing && (
+        <div className="fixed inset-0 z-50 bg-black/50" />
+      )}
       <div className="flex flex-col h-screen">
       <TopBar />
       <div className="flex-1 overflow-hidden">

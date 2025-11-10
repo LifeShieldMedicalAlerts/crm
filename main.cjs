@@ -57,6 +57,17 @@ ipcMain.handle('get-app-version', () => {
   return packageJson.version;
 });
 
+ipcMain.on('confirm-close', () => {
+  if (mainWindow) {
+    mainWindow.removeAllListeners('close');
+    mainWindow.close();
+  }
+});
+
+ipcMain.on('cancel-close', () => {
+  // Filler
+});
+
 // Create main window
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -69,6 +80,28 @@ function createWindow() {
       enableRemoteModule: true
     },
     show: false
+  });
+
+mainWindow.on('close', (e) => {
+    e.preventDefault();
+    
+    // Ask renderer
+    mainWindow.webContents.send('check-can-close');
+    
+    // Wait for response with timeout
+    const timeout = setTimeout(() => {
+      console.log('Close check timeout, allowing close');
+      if(mainWindow){
+        mainWindow.destroy();
+      }
+    }, 1000);
+    
+    ipcMain.once('can-close-response', (event, canClose) => {
+      clearTimeout(timeout);
+      if (canClose) {
+        mainWindow.destroy();
+      }
+    });
   });
 
   // Load the app

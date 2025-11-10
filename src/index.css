@@ -118,3 +118,24 @@
     @apply bg-background text-foreground;
   }
 }
+
+[data-sonner-toast] [data-description] {
+  color: oklch(var(--foreground)) !important;
+  opacity: 1 !important;
+  font-weight: 500;
+}
+
+[data-sonner-toast][data-type="error"] [data-description] {
+  color: oklch(0.1 0 0) !important;
+  opacity: 1 !important;
+}
+
+/* Error toast description in dark mode */
+.dark [data-sonner-toast][data-type="error"] [data-description] {
+  color: oklch(0.95 0 0) !important;
+  opacity: 1 !important;
+}
+
+[data-sonner-toast] [data-title] {
+  font-weight: 600;
+}

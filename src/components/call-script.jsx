@@ -1,3 +1,4 @@
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/contextproviders/AuthContext';
 import { useContactCenter } from '../contextproviders/ContactCenterContext';
 import useApi from '@/hooks/useApi';
@@ -49,7 +50,8 @@ import {
   Loader2,
   Info
 } from 'lucide-react';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { ChargeDatePicker } from './charge-date-picker';
+
 import { toast } from 'sonner';
 
 const CHRONIC_CONDITIONS = [
@@ -63,8 +65,8 @@ const CHRONIC_CONDITIONS = [
   'Liver Disease',
   'Cancer',
   'Stroke',
-  'Alzheimer\'s Disease',
-  'Parkinson\'s Disease',
+  'Alzheimers Disease',
+  'Parkinsons Disease',
   'Depression',
   'Anxiety',
   'Obesity',
@@ -96,6 +98,17 @@ export default function CallScript() {
   const [isSubscriptionCreated, setIsSubscriptionCreated] = useState(false);
   const [disclaimerAccepted, setDisclaimerAccepted] = useState(false);
   const prevCallRef = useRef(null);
+  const isBypassInformation = (str) => /^0+$/.test(str);
+
+  const formatDate = (d) => new Date(d).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'America/New_York'
+  });
+
+  // Usage:
+  // formatDate('2025-11-11T05:00:00.000Z') → "November 11, 2025"
 
   // Local form state that syncs with customerData
   const [formData, setFormData] = useState({
@@ -124,7 +137,7 @@ export default function CallScript() {
     account_number: '',
     selected_product: '',
     frequency: 'Monthly',
-    charge_date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+    charge_date: new Date().toISOString().split('T')[0],
     charge_amount: '$49.99'
   });
 
@@ -283,22 +296,31 @@ export default function CallScript() {
     setIsVerifying(true);
 
     if (currentQueueName && currentQueueName !== 'training@sip.lifeshieldmedicalalerts.com') {
-      const verificationResult = await paymentApi.execute('/billing/verifyaccount', 'POST', {
-        customerInformation: formData,
-        paymentInformation: billingInformation
-      });
-
-      setIsVerifying(false);
-
-      if (verificationResult.success === true) {
-        setIsAccountVerified(true);
-        toast.success('Account verified successfully!');
-        return true;
-      } else {
-        toast.error('Invalid Payment Method', {
-          description: verificationResult?.data?.reason || 'Please double check routing and account number.'
+      if (!isBypassInformation(billingInformation.account_number) && !isBypassInformation(billingInformation.routing_number)) {
+        const verificationResult = await paymentApi.execute('/billing/verifyaccount', 'POST', {
+          customer_id: formData?.customer_id,
+          payment_information: billingInformation,
+          action: 'VERIFY_PAYMENT_METHOD'
         });
-        return false;
+
+        setIsVerifying(false);
+
+        if (verificationResult.success === true) {
+          setIsAccountVerified(true);
+          toast.success('Account verified successfully!');
+          return true;
+        } else {
+          toast.error('Failed To Validate Payment Information', {
+            description: verificationResult?.data?.reason || 'Please double check routing and account number.'
+          });
+          return false;
+        }
+      } else {
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        setIsVerifying(false);
+        setIsAccountVerified(true);
+        toast.success('Agent Bypass Successful');
+        return true;
       }
     } else {
       await new Promise(resolve => setTimeout(resolve, 4000));
@@ -310,7 +332,7 @@ export default function CallScript() {
         return true;
       } else {
         toast.error('Invalid Payment Method', {
-          description: verificationResult?.data?.reason || 'Please double check routing and account number.'
+          description: 'Please double check routing and account number.'
         });
         return false;
       }
@@ -321,35 +343,40 @@ export default function CallScript() {
     setIsCreatingSubscription(true);
 
     if (currentQueueName && currentQueueName !== 'training@sip.lifeshieldmedicalalerts.com') {
-      try {
-        const filteredBilling = billingInformation;
-        delete filteredBilling.charge_amount;
-        delete filteredBilling.charge_date;
-        const result = await paymentApi.execute('/billing/subscribecustomer', 'POST', {
-          customerInformation: formData?.customer_id,
-          paymentInformation: filteredBilling
-        });
+      //check for agent bypass
+      if (!isBypassInformation(billingInformation.account_number) && !isBypassInformation(billingInformation.routing_number)) {
+        try {
+          const result = await paymentApi.execute('/billing/subscribecustomer', 'POST', {
+            customerId: formData?.customer_id,
+            frequency: billingInformation.frequency,
+            charge_date: billingInformation.charge_date,
+            action: "CREATE_SUBSCRIPTION"
+          });
 
-        setIsCreatingSubscription(false);
-        toast.success('Subscription created successfully!');
-        return true;
-
-        if (result.success) {
-          setIsSubscriptionCreated(true);
-          toast.success('Subscription created successfully!');
-          return true;
-        } else {
-          toast.error('Failed to create subscription', {
-            description: result?.data?.reason || 'Please try again.'
+          if (result?.success) {
+            setIsCreatingSubscription(false);
+            setIsSubscriptionCreated(true);
+            toast.success('Subscription created successfully!');
+            return true;
+          } else {
+            toast.error('Failed to create subscription', {
+              description: result?.data?.reason || 'Please try again.'
+            });
+            return false;
+          }
+        } catch (error) {
+          setIsCreatingSubscription(false);
+          toast.error('An error occurred', {
+            description: 'Please try again later.'
           });
           return false;
         }
-      } catch (error) {
+      } else {
+        await new Promise(resolve => setTimeout(resolve, 3000));
         setIsCreatingSubscription(false);
-        toast.error('An error occurred', {
-          description: 'Please try again later.'
-        });
-        return false;
+        setIsSubscriptionCreated(true);
+        toast.success('Subscription created successfully!');
+        return true;
       }
     } else {
       //simulate subscription processing for training
@@ -482,7 +509,13 @@ export default function CallScript() {
         case 'Customer':
           return customerData?.[value] || '';
         case 'Billing':
-          return billingInformation?.[value] || '';
+          if (value === "charge_date") {
+            return formatDate(billingInformation?.[value] || new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'America/New_York' }));
+          } else if (value === "account_lastfour") {
+            return billingInformation?.account_number?.slice(-4) || '';
+          } else {
+            return billingInformation?.[value] || '';
+          }
         case 'Agent':
           return dbUser?.[value] || '';
         default:
@@ -901,7 +934,17 @@ export default function CallScript() {
             </CardContent>
           </Card>
         );
-
+      case 'charge_date_manager':
+        return (
+          <Card key={index} className="border-l-4 border-l-blue-500">
+            <CardContent>
+              <ChargeDatePicker
+                chargeDate={billingInformation.charge_date}
+                onDateChange={(value) => handleBillingFieldChange('charge_date', value)}
+              />
+            </CardContent>
+          </Card>
+        );
       case 'verification_display':
         return (
           <Card key={contentKey} className="border-l-4 border-l-blue-500">
@@ -1096,8 +1139,9 @@ export default function CallScript() {
         );
 
       case 'statistics':
+        const filteredStats = formData.conditions?.length > 0 ? formData.conditions[0] : 'Fall';
         return (
-          <Card key={contentKey}>
+          <Card key={contentKey} className="gap-1">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <TrendingUp className="h-5 w-5" />
@@ -1105,7 +1149,7 @@ export default function CallScript() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {content.items?.map((stat, idx) => (
+              {content.items?.filter(s => s?.tags?.includes(filteredStats))?.map((stat, idx) => (
                 <div key={`${index}-stat-${idx}`} className="space-y-2">
                   <Badge variant="outline" className="mb-2">{stat.condition}</Badge>
                   <p className="text-sm leading-relaxed">{stat.stat}</p>
@@ -1118,16 +1162,17 @@ export default function CallScript() {
         );
 
       case 'stories':
+        const filteredStories = formData.conditions?.length > 0 ? formData.conditions[0] : 'Fall';
         return (
-          <Card key={contentKey}>
+          <Card key={contentKey} className="gap-1">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <BookOpen className="h-5 w-5" />
-                Case Studies
+                Caller Stories
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {content.items?.map((story, idx) => (
+              {content.items?.filter(s => s?.tags?.includes(filteredStories))?.map((story, idx) => (
                 <div key={`${index}-story-${idx}`} className="space-y-2">
                   <Badge variant="secondary">{story.condition}</Badge>
                   <p className="text-sm leading-relaxed italic">{story.story}</p>
@@ -1229,11 +1274,7 @@ export default function CallScript() {
         account_number: '',
         selected_product: '',
         frequency: 'Monthly',
-        charge_date: new Date().toLocaleDateString('en-US', {
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric'
-        }),
+        charge_date: new Date().toISOString().split('T')[0],
         charge_amount: '$49.99'
       });
       setFormData({
