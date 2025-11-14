@@ -103,6 +103,23 @@ const formatCVV = (value) => {
   return value.replace(/\D/g, '').slice(0, 4);
 };
 
+const parseLocalDate = (dateStr) => {
+  if (!dateStr) return new Date()
+  const [year, month, day] = dateStr.split('-').map(Number)
+  return new Date(year, month - 1, day)
+}
+
+// Format for display in EST
+const formatDate = (dateStr) => {
+  const date = parseLocalDate(dateStr)
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'America/New_York'
+  })
+}
+
 export default function CallScript() {
   const { dbUser } = useAuth();
   const { scriptData, customerData, productOfferings, debouncedUpdate, currentCall, currentQueueName, setCanCallBack } = useContactCenter();
@@ -116,13 +133,6 @@ export default function CallScript() {
   const [disclaimerAccepted, setDisclaimerAccepted] = useState(false);
   const prevCallRef = useRef(null);
   const isBypassInformation = (str) => /^0+$/.test(str);
-
-  const formatDate = (d) => new Date(d).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    timeZone: 'America/New_York'
-  });
 
   // Usage:
   // formatDate('2025-11-11T05:00:00.000Z') → "November 11, 2025"
@@ -357,6 +367,8 @@ useEffect(() => {
         return false;
       }
     }
+
+    setHasAttemptedVerification(true);
 
     setIsVerifying(true);
 
@@ -1356,7 +1368,13 @@ case 'billing_fields':
         account_number: '',
         selected_product: '',
         frequency: 'Monthly',
-        charge_date: new Date().toISOString().split('T')[0],
+        charge_date: (() => {
+          const now = new Date()
+          const year = now.getFullYear()
+          const month = String(now.getMonth() + 1).padStart(2, '0')
+          const day = String(now.getDate()).padStart(2, '0')
+          return `${year}-${month}-${day}`
+        })(),
         charge_amount: '$49.99'
       });
       setFormData({

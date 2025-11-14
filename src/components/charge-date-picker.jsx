@@ -12,6 +12,20 @@ import {
 
 export function ChargeDatePicker({ chargeDate, onDateChange }) {
   const [open, setOpen] = React.useState(false)
+  
+  const parseLocalDate = (dateStr) => {
+    if (!dateStr) return undefined
+    const [year, month, day] = dateStr.split('-').map(Number)
+    return new Date(year, month - 1, day)
+  }
+  
+  const formatLocalDate = (date) => {
+    if (!date) return null
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -25,17 +39,17 @@ export function ChargeDatePicker({ chargeDate, onDateChange }) {
             id="date"
             className="w-48 justify-between font-normal"
           >
-            {chargeDate ? new Date(chargeDate).toLocaleDateString() : "Select date"}
+            {chargeDate ? parseLocalDate(chargeDate).toLocaleDateString() : "Select date"}
             <ChevronDownIcon />
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto overflow-hidden p-0" align="start">
           <Calendar
             mode="single"
-            selected={chargeDate ? new Date(chargeDate) : undefined}
+            selected={parseLocalDate(chargeDate)}
             captionLayout="dropdown"
             onSelect={(date) => {
-              onDateChange(date?.toISOString())
+              onDateChange(formatLocalDate(date))
               setOpen(false)
             }}
           />
