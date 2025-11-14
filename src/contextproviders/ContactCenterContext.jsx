@@ -22,6 +22,7 @@ export function ContactCenterProvider({ children }) {
   const remoteAudioRef = useRef(null);
   const shouldReconnectRef = useRef(true);
   const callAnsweredSoundRef = useRef(null);
+  const ringingToneRef = useRef(null);
 
   const [sipState, setSipState] = useState('disconnected');
   const [currentCall, setCurrentCall] = useState(null);
@@ -34,6 +35,9 @@ export function ContactCenterProvider({ children }) {
   const [currentQueueName, setCurrentQueueName] = useState(null);
 
   const [shouldDisposition, setShouldDisposition] = useState(false);
+  const [canCallBack, setCanCallBack] = useState(false);
+  const [currentCallIsOutbound, setCurrentCallIsOutbound] = useState(false);
+  const obCallRef = useRef(false);
   const [scriptData, setScriptData] = useState(null);
   const [productOfferings, setProductOfferings] = useState(null)
   const [campaignSettings, setCampaignSettings] = useState(null)
@@ -57,6 +61,10 @@ export function ContactCenterProvider({ children }) {
   useEffect(() => {
     console.log('customer data:', customerData)
   }, [customerData])
+
+  useEffect(() => {
+    obCallRef.current = currentCallIsOutbound;
+  }, [currentCallIsOutbound])
 
 
   const requestAudioPermissions = useCallback(async () => {
@@ -179,14 +187,18 @@ export function ContactCenterProvider({ children }) {
 
   const updateCustomerData = useCallback(async ({ data }) => {
     console.log('recieved data ', data);
-    if(currentQueueName && currentQueueName !== 'training@sip.lifeshieldmedicalalerts.com'){
+    console.log(currentQueueName)
+    if (currentQueueName && currentQueueName !== 'training@sip.lifeshieldmedicalalerts.com') {
       const updateResult = await customerApi.execute('/customer/update', 'POST', data);
-    }else{
+    } else {
+      if (currentCallIsOutbound === true) {
+        const updateResult = await customerApi.execute('/customer/update', 'POST', data);
+      }
       //overwrite all server requests for training calls
       return true;
     }
-    
-  },[currentQueueName])
+
+  }, [currentQueueName, currentCallIsOutbound])
 
   const debouncedUpdate = useDebounce(updateCustomerData, 500);
 
@@ -462,6 +474,7 @@ export function ContactCenterProvider({ children }) {
           setCurrentQueueName(null);
           setIncomingCall(null);
           setShouldDisposition(false);
+          setCurrentCallIsOutbound(false);
 
           toast.success('Call dispositioned.');
           return true;
@@ -477,16 +490,113 @@ export function ContactCenterProvider({ children }) {
         return false;
       }
     } else {
-          //Attempted patch for super short calls.
+      if (currentCallIsOutbound === true) {
+        try {
+          const dispoResult = await dispositionApi.execute('/call/dispositionoutbound', 'POST', { agentId: dbUser?.agent_id, disposition: disposition });
 
+          if (dispoResult?.success === true) {
+            setCurrentCall(null);
+            setCurrentCallUUID(null);
+            setCurrentQueueName(null);
+            setIncomingCall(null);
+            setShouldDisposition(false);
+            setCurrentCallIsOutbound(false);
+
+            toast.success('Call dispositioned.');
+            return true;
+          } else {
+            console.error('Failed to disposition call: ', JSON.stringify(dispoResult?.data || {}));
+            toast.error('Failed to save disposition');
+            return false;
+          }
+        } catch (error) {
+          console.error('Error saving disposition:', error);
+          toast.error('Failed to save disposition');
+          return false;
+        }
+      } else {
+        //Attempted patch for super short calls
+        setCurrentCall(null);
+        setCurrentCallUUID(null);
+        setCurrentQueueName(null);
+        setIncomingCall(null);
+        setShouldDisposition(false);
+        setCurrentCallIsOutbound(false);
+        return true;
+      }
+    }
+  }, [currentCallUUID, currentCallIsOutbound])
+
+  const handleDispositionAndCallBack = useCallback(async (disposition) => {
+    if (!disposition) {
+      toast.error('Missing Call Disposition');
+      return false
+    }
+
+    if (currentCallUUID) {
+      try {
+        const dispoResult = await dispositionApi.execute('/call/disposition', 'POST', { callId: currentCallUUID, disposition: disposition });
+
+        if (dispoResult?.success === true) {
+          const outboundTarget = incomingCall?.callerNumber
+          //now initialize the call back
+          toast.success('Call dispositioned.');
           setCurrentCall(null);
           setCurrentCallUUID(null);
           setCurrentQueueName(null);
           setIncomingCall(null);
           setShouldDisposition(false);
+          await makeCall(outboundTarget);
+          updateStatus('Callback');
           return true;
+        } else {
+          console.error('Failed to disposition call: ', JSON.stringify(dispoResult?.data || {}));
+          toast.error('Failed to save disposition');
+          return false;
+        }
+
+      } catch (error) {
+        console.error('Error saving disposition:', error);
+        toast.error('Failed to save disposition');
+        return false;
+      }
+    } else {
+      if (currentCallIsOutbound === true) {
+        try {
+          const dispoResult = await dispositionApi.execute('/call/dispositionoutbound', 'POST', { agentId: dbUser?.agent_id, disposition: disposition });
+
+          if (dispoResult?.success === true) {
+            setCurrentCall(null);
+            setCurrentCallUUID(null);
+            setCurrentQueueName(null);
+            setIncomingCall(null);
+            setShouldDisposition(false);
+            setCurrentCallIsOutbound(false);
+
+            toast.success('Call dispositioned.');
+            return true;
+          } else {
+            console.error('Failed to disposition call: ', JSON.stringify(dispoResult?.data || {}));
+            toast.error('Failed to save disposition');
+            return false;
+          }
+        } catch (error) {
+          console.error('Error saving disposition:', error);
+          toast.error('Failed to save disposition');
+          return false;
+        }
+      } else {
+        //Attempted patch for super short calls
+        setCurrentCall(null);
+        setCurrentCallUUID(null);
+        setCurrentQueueName(null);
+        setIncomingCall(null);
+        setShouldDisposition(false);
+        setCurrentCallIsOutbound(false);
+        return true;
+      }
     }
-  }, [currentCallUUID])
+  }, [currentCallUUID, incomingCall, currentCallIsOutbound])
 
   useEffect(() => {
     if (!pbxDetails) {
@@ -530,10 +640,18 @@ export function ContactCenterProvider({ children }) {
     callAnsweredSoundRef.current = new Audio('/incoming-call.mp3');
     callAnsweredSoundRef.current.volume = 0.8;
 
+    ringingToneRef.current = new Audio('/outbound-ring.mp3');
+    ringingToneRef.current.volume = 0.8;
+    ringingToneRef.current.loop = true;
+
     return () => {
       if (callAnsweredSoundRef.current) {
         callAnsweredSoundRef.current.pause();
         callAnsweredSoundRef.current = null;
+      }
+      if (ringingToneRef.current) {
+        ringingToneRef.current.pause();
+        ringingToneRef.current = null;
       }
     };
   }, []);
@@ -654,7 +772,18 @@ export function ContactCenterProvider({ children }) {
       },
       onCallAnswered: () => {
         console.log('Call answered');
+
+        if (ringingToneRef.current) {
+          ringingToneRef.current.pause();
+          ringingToneRef.current.currentTime = 0;
+        }
+
+
+        const session = simpleUser?.session;
+        const isOutbound = session?.outgoingInviteRequest !== undefined;
+        setCurrentCallIsOutbound(isOutbound)
         setCurrentCall(simpleUser);
+
 
         if (callAnsweredSoundRef.current) {
           callAnsweredSoundRef.current.currentTime = 0;
@@ -665,7 +794,16 @@ export function ContactCenterProvider({ children }) {
       },
       onCallHangup: () => {
         console.log('Call ended');
-        setShouldDisposition(true)
+
+        if (ringingToneRef.current) {
+          ringingToneRef.current.pause();
+          ringingToneRef.current.currentTime = 0;
+        }
+
+        setShouldDisposition(true);
+        if (obCallRef.current === true) {
+          updateStatus('Wrap Up')
+        }
         toast.info('Call Ended');
       },
       onCallReceived: async () => {
@@ -818,12 +956,24 @@ export function ContactCenterProvider({ children }) {
     }
 
     try {
+      if (ringingToneRef.current) {
+        ringingToneRef.current.currentTime = 0;
+        ringingToneRef.current.play().catch(err => {
+          console.error('Error playing ringing tone:', err);
+        });
+      }
+
       await simpleUserRef.current.call(`sip:${phoneNumber}@sip.lifeshieldmedicalalerts.com`);
       setCurrentCall(simpleUserRef.current);
       toast.success('Call initiated');
     } catch (error) {
       console.error('Error making call:', error);
       toast.error('Failed to make call');
+
+      if (ringingToneRef.current) {
+        ringingToneRef.current.pause();
+        ringingToneRef.current.currentTime = 0;
+      }
     }
   }, [audioPermissionGranted, requestAudioPermissions]);
 
@@ -941,6 +1091,10 @@ export function ContactCenterProvider({ children }) {
 
     shouldDisposition,
     handleDisposition,
+    handleDispositionAndCallBack,
+    currentCallIsOutbound,
+    canCallBack,
+    setCanCallBack,
     currentCallUUID,
     scriptData,
     productOfferings,

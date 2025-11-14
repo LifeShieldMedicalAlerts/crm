@@ -89,10 +89,11 @@ const formatPhoneNumber = (value) => {
 
 export default function CallScript() {
   const { dbUser } = useAuth();
-  const { scriptData, customerData, productOfferings, debouncedUpdate, currentCall, currentQueueName } = useContactCenter();
+  const { scriptData, customerData, productOfferings, debouncedUpdate, currentCall, currentQueueName, setCanCallBack } = useContactCenter();
   const paymentApi = useApi();
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [hasAttemptedVerification, setHasAttemptedVerification] = useState(false);
   const [isAccountVerified, setIsAccountVerified] = useState(false);
   const [isCreatingSubscription, setIsCreatingSubscription] = useState(false);
   const [isSubscriptionCreated, setIsSubscriptionCreated] = useState(false);
@@ -148,6 +149,14 @@ export default function CallScript() {
     email_address: ''
   });
   const [showAddContact, setShowAddContact] = useState(false);
+
+  useEffect(()=>{
+    if(hasAttemptedVerification === true && formData.have_consent === true){
+      setCanCallBack(true);
+    } else {
+    setCanCallBack(false);
+  }
+  },[hasAttemptedVerification, formData])
 
   // Sync customerData to local formData
   useEffect(() => {
@@ -294,6 +303,7 @@ export default function CallScript() {
     }
 
     setIsVerifying(true);
+    setHasAttemptedVerification(true);
 
     if (currentQueueName && currentQueueName !== 'training@sip.lifeshieldmedicalalerts.com') {
       if (!isBypassInformation(billingInformation.account_number) && !isBypassInformation(billingInformation.routing_number)) {
@@ -1265,9 +1275,11 @@ export default function CallScript() {
     if (prevCallRef.current !== null && currentCall === null) {
       // Reset all states
       setCurrentSlideIndex(0);
+      setHasAttemptedVerification(false);
       setIsAccountVerified(false);
       setIsSubscriptionCreated(false);
       setDisclaimerAccepted(false);
+      setCanCallBack(false);
       setBillingInformation({
         type: 'checking',
         routing_number: '',
@@ -1303,6 +1315,8 @@ export default function CallScript() {
         email_address: ''
       });
       setShowAddContact(false);
+    }else{
+      console.log('Form data NOT reset')
     }
 
     prevCallRef.current = currentCall;

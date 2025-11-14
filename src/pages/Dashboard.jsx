@@ -2,7 +2,7 @@ import { useAuth } from "@/contextproviders/AuthContext";
 import { useContactCenter } from '../contextproviders/ContactCenterContext';
 import { TopBar } from "@/components/top-bar"
 import CallScript from "@/components/call-script";
-import { Loader2, TriangleAlert } from "lucide-react"
+import { Loader2, TriangleAlert, MoreHorizontalIcon } from "lucide-react"
 import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
 import {
@@ -21,6 +21,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { ButtonGroup } from "@/components/ui/button-group"
 import { Label } from "@/components/ui/label";
 
 function Dashboard() {
@@ -31,6 +45,9 @@ function Dashboard() {
     currentCall,
     shouldDisposition,
     handleDisposition,
+    handleDispositionAndCallBack,
+    currentCallIsOutbound,
+    canCallBack,
     campaignSettings,
     updateStatus
   } = useContactCenter();
@@ -40,34 +57,34 @@ function Dashboard() {
   const [isClosing, setIsClosing] = useState(false);
 
 
-useEffect(() => {
-  const handleCheckCanClose = async () => {
-    if (currentCall || shouldDisposition) {
-      toast.error('Cannot close application', {
-        description: shouldDisposition 
-          ? 'Please disposition your call before closing.'
-          : 'Please end and disposition your call before closing.',
-        duration: 5000,
-      });
-      window?.electron?.respondCanClose(false);
-      return;
-    }
-    
-    setIsClosing(true);
-    try {
-      updateStatus('Logged Out');
-      await logout();
-      window?.electron?.respondCanClose(true);
-    } catch (error) {
-      console.error('Logout failed:', error);
-      window?.electron?.respondCanClose(true);
-    }
-  };
+  useEffect(() => {
+    const handleCheckCanClose = async () => {
+      if (currentCall || shouldDisposition) {
+        toast.error('Cannot close application', {
+          description: shouldDisposition
+            ? 'Please disposition your call before closing.'
+            : 'Please end and disposition your call before closing.',
+          duration: 5000,
+        });
+        window?.electron?.respondCanClose(false);
+        return;
+      }
 
-  const cleanup = window?.electron?.onCheckCanClose(handleCheckCanClose);
-  
-  return cleanup;
-}, [currentCall, shouldDisposition, updateStatus, logout]);
+      setIsClosing(true);
+      try {
+        updateStatus('Logged Out');
+        await logout();
+        window?.electron?.respondCanClose(true);
+      } catch (error) {
+        console.error('Logout failed:', error);
+        window?.electron?.respondCanClose(true);
+      }
+    };
+
+    const cleanup = window?.electron?.onCheckCanClose(handleCheckCanClose);
+
+    return cleanup;
+  }, [currentCall, shouldDisposition, updateStatus, logout]);
 
 
 
@@ -98,7 +115,23 @@ useEffect(() => {
     } finally {
       setIsSubmitting(false);
     }
-  },[selectedDisposition]);
+  }, [selectedDisposition]);
+
+  const handleSubmitAndCallback = useCallback(async () => {
+    if (!selectedDisposition) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await handleDispositionAndCallBack(selectedDisposition);
+      setSelectedDisposition("");
+    } catch (error) {
+      console.error('Error submitting disposition:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [selectedDisposition]);
 
   if (initError) {
     return (
@@ -164,19 +197,19 @@ useEffect(() => {
         <div className="fixed inset-0 z-50 bg-black/50" />
       )}
       <div className="flex flex-col h-screen">
-      <TopBar />
-      <div className="flex-1 overflow-hidden">
-        {currentCall ? (
-          <CallScript />
-        ) : (
-          <div className="h-full flex items-center justify-center">
-            <p className="text-muted-foreground">No active call</p>
-          </div>
-        )}
+        <TopBar />
+        <div className="flex-1 overflow-hidden">
+          {currentCall ? (
+            <CallScript />
+          ) : (
+            <div className="h-full flex items-center justify-center">
+              <p className="text-muted-foreground">No active call</p>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
 
-      <Dialog open={shouldDisposition} onOpenChange={() => {}}>
+      <Dialog open={shouldDisposition} onOpenChange={() => { }}>
         <DialogContent className="sm:max-w-lg" onInteractOutside={(e) => e.preventDefault()}>
           <DialogHeader className="text-center">
             <DialogTitle className="text-center">Call Disposition</DialogTitle>
@@ -184,12 +217,12 @@ useEffect(() => {
               Please select the outcome of this call before continuing.
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="flex flex-col items-center py-6">
             <div className="w-full max-w-md space-y-3">
               <Label htmlFor="disposition" className="text-center block">Disposition</Label>
-              <Select 
-                value={selectedDisposition} 
+              <Select
+                value={selectedDisposition}
                 onValueChange={setSelectedDisposition}
               >
                 <SelectTrigger id="disposition" className="w-full">
@@ -201,29 +234,53 @@ useEffect(() => {
                       {d.friendlyName}
                     </SelectItem>
                   ))}
-                   <SelectItem key="da" value="da">
-                      No Caller - Dead Air
+                  <SelectItem key="da" value="da">
+                    No Caller - Dead Air
+                  </SelectItem>
+                  {currentCallIsOutbound && (
+                    <SelectItem key="vm" value="vm">
+                      Left Voicemail
                     </SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
           </div>
 
           <DialogFooter className="sm:justify-center">
-            <Button
-              onClick={handleSubmitDisposition}
-              disabled={!selectedDisposition || isSubmitting}
-              className="w-full max-w-md"
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Submitting...
-                </>
-              ) : (
-                'Submit Disposition'
-              )}
-            </Button>
+            <ButtonGroup>
+                <Button 
+                  onClick={handleSubmitDisposition}
+                  disabled={!selectedDisposition || isSubmitting}
+                  className="w-full max-w-md">
+                  {isSubmitting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Submitting...
+                      </>
+                    ) : (
+                      'Submit Disposition'
+                    )}
+                  </Button>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button 
+                        size="icon"
+                        aria-label="More Options"
+                        onClick={handleSubmitDisposition}
+                        disabled={!selectedDisposition || !canCallBack || isSubmitting}>
+                        <MoreHorizontalIcon />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-52">
+                      <DropdownMenuGroup>
+                        <DropdownMenuItem onClick={handleSubmitAndCallback}>
+                          Disposition & Call Back
+                        </DropdownMenuItem>
+                      </DropdownMenuGroup>
+                     </DropdownMenuContent>
+                    </DropdownMenu> 
+              </ButtonGroup>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -39,12 +39,9 @@ import { toast } from "sonner"
 export function TopBar() {
   const {dbUser, logout} = useAuth();
   const {
-    fetchCustomerData,
-    sipError,
     sipState,
     currentCall,
     shouldDisposition,
-    makeCall,
     hangupCall,
     toggleMute,
     toggleHold,
@@ -74,12 +71,6 @@ export function TopBar() {
       toast.error('Invalid Status Selected')
     }
   };
-
-
-
-  const testOutboundCall = (number) =>{
-    makeCall('8603919592')
-  }
 
   const attemptLogout = useCallback(async () =>{
     if(!currentCall && shouldDisposition === false){
@@ -137,7 +128,7 @@ export function TopBar() {
             </div>
         </div>
         <div className="flex items-center space-x-4">
-          {pbxDetails?.uuid && (
+          {(pbxDetails?.uuid || currentCall) && (
             <div className="flex items-center space-x-4 bg-muted/50 px-4 py-1 rounded-lg">
               <Button
                 variant={isHeld ? "secondary" : "outline"}
