@@ -87,6 +87,22 @@ const formatPhoneNumber = (value) => {
   return formatted;
 };
 
+const formatCardNumber = (value) => {
+  const numbers = value.replace(/\D/g, '');
+  const groups = numbers.match(/.{1,4}/g);
+  return groups ? groups.join(' ').substr(0, 19) : numbers;
+};
+
+const formatCardExpiration = (value) => {
+  const numbers = value.replace(/\D/g, '');
+  if (numbers.length <= 2) return numbers;
+  return `${numbers.slice(0, 2)}/${numbers.slice(2, 4)}`;
+};
+
+const formatCVV = (value) => {
+  return value.replace(/\D/g, '').slice(0, 4);
+};
+
 export default function CallScript() {
   const { dbUser } = useAuth();
   const { scriptData, customerData, productOfferings, debouncedUpdate, currentCall, currentQueueName, setCanCallBack } = useContactCenter();
@@ -136,9 +152,12 @@ export default function CallScript() {
     type: 'checking',
     routing_number: '',
     account_number: '',
+    card_number: '',
+    card_expiration: '',
+    card_cvv: '',
     selected_product: '',
-    frequency: 'Monthly',
     charge_date: new Date().toISOString().split('T')[0],
+    frequency: 'Monthly',
     charge_amount: '$49.99'
   });
 
@@ -150,13 +169,24 @@ export default function CallScript() {
   });
   const [showAddContact, setShowAddContact] = useState(false);
 
-  useEffect(()=>{
-    if(hasAttemptedVerification === true && formData.have_consent === true){
+  useEffect(() => {
+    if (hasAttemptedVerification === true && formData.have_consent === true) {
       setCanCallBack(true);
     } else {
-    setCanCallBack(false);
-  }
-  },[hasAttemptedVerification, formData])
+      setCanCallBack(false);
+    }
+  }, [hasAttemptedVerification, formData])
+
+useEffect(() => {
+  setBillingInformation((prev) => ({
+    ...prev,
+    routing_number: '',
+    account_number: '',
+    card_number: '',
+    card_expiration: '',
+    card_cvv: '',
+  }))
+}, [billingInformation.type])
 
   // Sync customerData to local formData
   useEffect(() => {
@@ -287,114 +317,125 @@ export default function CallScript() {
   };
 
   const verifyAccountInformation = useCallback(async () => {
-    if (!billingInformation.routing_number || !billingInformation.account_number) {
-      toast.error('Invalid billing information. Please enter both routing and account number.');
-      return false;
-    }
+    const currentMedium = billingInformation.type === 'checking' || billingInformation.type === 'savings' ? 'ach' : 'card';
 
-    if (billingInformation.routing_number.length !== 9) {
-      toast.error('Routing number must be exactly 9 digits.');
-      return false;
-    }
+    // Validate based on payment medium
+    if (currentMedium === 'ach') {
+      if (!billingInformation.routing_number || !billingInformation.account_number) {
+        toast.error('Invalid billing information. Please enter both routing and account number.');
+        return false;
+      }
 
-    if (billingInformation.account_number.length < 5) {
-      toast.error('Account number must be at least 5 digits.');
-      return false;
+      if (billingInformation.routing_number.length !== 9) {
+        toast.error('Routing number must be exactly 9 digits.');
+        return false;
+      }
+
+      if (billingInformation.account_number.length < 5) {
+        toast.error('Account number must be at least 5 digits.');
+        return false;
+      }
+    } else if (currentMedium === 'card') {
+      if (!billingInformation.card_number || !billingInformation.card_expiration || !billingInformation.card_cvv) {
+        toast.error('Please enter complete card information.');
+        return false;
+      }
+
+      const cardNumberDigits = billingInformation.card_number.replace(/\s/g, '');
+      if (cardNumberDigits.length < 13 || cardNumberDigits.length > 19) {
+        toast.error('Invalid card number.');
+        return false;
+      }
+
+      if (billingInformation.card_expiration.length !== 5) {
+        toast.error('Invalid expiration date. Use MM/YY format.');
+        return false;
+      }
+
+      if (billingInformation.card_cvv.length < 3) {
+        toast.error('Invalid security code.');
+        return false;
+      }
     }
 
     setIsVerifying(true);
-    setHasAttemptedVerification(true);
 
-    if (currentQueueName && currentQueueName !== 'training@sip.lifeshieldmedicalalerts.com') {
-      if (!isBypassInformation(billingInformation.account_number) && !isBypassInformation(billingInformation.routing_number)) {
-        const verificationResult = await paymentApi.execute('/billing/verifyaccount', 'POST', {
-          customer_id: formData?.customer_id,
-          payment_information: billingInformation,
-          action: 'VERIFY_PAYMENT_METHOD'
-        });
-
-        setIsVerifying(false);
-
-        if (verificationResult.success === true) {
-          setIsAccountVerified(true);
-          toast.success('Account verified successfully!');
-          return true;
-        } else {
-          toast.error('Failed To Validate Payment Information', {
-            description: verificationResult?.data?.reason || 'Please double check routing and account number.'
-          });
-          return false;
-        }
-      } else {
-        await new Promise(resolve => setTimeout(resolve, 3000));
-        setIsVerifying(false);
-        setIsAccountVerified(true);
-        toast.success('Agent Bypass Successful');
-        return true;
-      }
-    } else {
+    // Training queue
+    if (currentQueueName && currentQueueName === 'training@sip.lifeshieldmedicalalerts.com') {
       await new Promise(resolve => setTimeout(resolve, 4000));
-      const success = Math.random() < 0.8; //set an 80% chance of success
+      const success = Math.random() < 0.8; // 80% chance of success
       setIsVerifying(false);
+
       if (success) {
         setIsAccountVerified(true);
-        toast.success('Account verified successfully!');
+        toast.success('Payment method verified successfully!');
         return true;
       } else {
         toast.error('Invalid Payment Method', {
-          description: 'Please double check routing and account number.'
+          description: 'Please double check payment information.'
         });
         return false;
       }
+    }
+
+    //Real stuff
+    const verificationResult = await paymentApi.execute('/billing/verifyaccount', 'POST', {
+      customer_id: formData?.customer_id,
+      payment_information: billingInformation,
+      action: 'VERIFY_PAYMENT_METHOD'
+    });
+
+    setIsVerifying(false);
+
+    if (verificationResult.success === true) {
+      setIsAccountVerified(true);
+      toast.success('Payment method verified successfully!');
+      return true;
+    } else {
+      toast.error('Failed To Validate Payment Information', {
+        description: verificationResult?.data?.reason || 'Please double check payment information.'
+      });
+      return false;
     }
   }, [billingInformation, formData, paymentApi, currentQueueName]);
 
   const createSubscription = useCallback(async () => {
     setIsCreatingSubscription(true);
 
-    if (currentQueueName && currentQueueName !== 'training@sip.lifeshieldmedicalalerts.com') {
-      //check for agent bypass
-      if (!isBypassInformation(billingInformation.account_number) && !isBypassInformation(billingInformation.routing_number)) {
-        try {
-          const result = await paymentApi.execute('/billing/subscribecustomer', 'POST', {
-            customerId: formData?.customer_id,
-            frequency: billingInformation.frequency,
-            charge_date: billingInformation.charge_date,
-            action: "CREATE_SUBSCRIPTION"
-          });
-
-          if (result?.success) {
-            setIsCreatingSubscription(false);
-            setIsSubscriptionCreated(true);
-            toast.success('Subscription created successfully!');
-            return true;
-          } else {
-            toast.error('Failed to create subscription', {
-              description: result?.data?.reason || 'Please try again.'
-            });
-            return false;
-          }
-        } catch (error) {
-          setIsCreatingSubscription(false);
-          toast.error('An error occurred', {
-            description: 'Please try again later.'
-          });
-          return false;
-        }
-      } else {
-        await new Promise(resolve => setTimeout(resolve, 3000));
-        setIsCreatingSubscription(false);
-        setIsSubscriptionCreated(true);
-        toast.success('Subscription created successfully!');
-        return true;
-      }
-    } else {
-      //simulate subscription processing for training
+    if (currentQueueName && currentQueueName === 'training@sip.lifeshieldmedicalalerts.com') {
       await new Promise(resolve => setTimeout(resolve, 4000));
       setIsCreatingSubscription(false);
       toast.success('Subscription created successfully!');
       return true;
     }
+    //actual processing
+    try {
+      const result = await paymentApi.execute('/billing/subscribecustomer', 'POST', {
+        customerId: formData?.customer_id,
+        frequency: billingInformation.frequency,
+        charge_date: billingInformation.charge_date,
+        action: "CREATE_SUBSCRIPTION"
+      });
+
+      if (result?.success) {
+        setIsCreatingSubscription(false);
+        setIsSubscriptionCreated(true);
+        toast.success('Subscription created successfully!');
+        return true;
+      } else {
+        toast.error('Failed to create subscription', {
+          description: result?.data?.reason || 'Please try again.'
+        });
+        return false;
+      }
+    } catch (error) {
+      setIsCreatingSubscription(false);
+      toast.error('An error occurred', {
+        description: 'Please try again later.'
+      });
+      return false;
+    }
+
   }, [formData, billingInformation, paymentApi, currentQueueName]);
 
   // Check if current slide has billing fields
@@ -433,7 +474,17 @@ export default function CallScript() {
 
       // Check billing_fields
       if (content.type === 'billing_fields' && content.fields) {
+        const typeField = content.fields.find(f => f.name === 'type');
+        const selectedOption = typeField?.options?.find(
+          opt => opt.value === billingInformation.type
+        );
+        const currentMedium = selectedOption?.medium;
+
         for (const field of content.fields) {
+          if (field.medium && field.medium !== currentMedium) {
+            continue;
+          }
+          
           if (field.required) {
             const value = billingInformation[field.name];
             if (!value || (typeof value === 'string' && value.trim() === '')) {
@@ -610,71 +661,90 @@ export default function CallScript() {
           </Card>
         );
 
-      case 'billing_fields':
-        return (
-          <Card key={contentKey} className="border-l-4 border-l-emerald-500">
-            <CardContent>
-              <div className="space-y-4">
-                {content.fields?.map((field, fieldIndex) => (
-                  <div key={`${index}-billing-field-${fieldIndex}`} className="space-y-2">
-                    <Label htmlFor={field.name}>
-                      {field.label}
-                      {field.required && <span className="text-red-500 ml-1">*</span>}
-                    </Label>
-                    {field.type === 'select' ? (
-                      <Select
-                        value={billingInformation[field.name]}
-                        onValueChange={(value) => handleBillingFieldChange(field.name, value)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder={field.placeholder || 'Select...'} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {field.options?.map((option, optIndex) => (
-                            <SelectItem key={`${index}-billing-option-${fieldIndex}-${optIndex}`} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <Input
-                        id={field.name}
-                        name={field.name}
-                        type={field.type}
-                        value={billingInformation[field.name] || ''}
-                        onChange={(e) => {
-                          let value = e.target.value;
-                          // Auto-format routing and account numbers to digits only
-                          if (field.name === 'routing_number' || field.name === 'account_number') {
-                            value = value.replace(/\D/g, '');
-                            if (field.name === 'routing_number') {
-                              value = value.slice(0, 9);
-                            }
-                          }
-                          handleBillingFieldChange(field.name, value);
-                        }}
-                        placeholder={field.placeholder}
-                        required={field.required}
-                        maxLength={field.maxLength}
-                      />
-                    )}
-                    {field.helpText && (
-                      <p className="text-xs text-muted-foreground">{field.helpText}</p>
-                    )}
-                  </div>
-                ))}
+case 'billing_fields':
+  // Determine current payment medium
+  const typeField = content.fields?.find(f => f.name === 'type');
+  const selectedOption = typeField?.options?.find(
+    opt => opt.value === billingInformation.type
+  );
+  const currentMedium = selectedOption?.medium;
 
-                {isAccountVerified && (
-                  <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
-                    <CheckSquare className="h-5 w-5 text-green-600" />
-                    <span className="text-sm font-medium text-green-700">Account verified successfully</span>
-                  </div>
+  return (
+    <Card key={index} className="border-l-4 border-l-emerald-500">
+      <CardContent>
+        <div className="space-y-4">
+          {content.fields?.map((field, fieldIndex) => {
+            // Skip fields that don't match current medium
+            if (field.medium && field.medium !== currentMedium) {
+              return null;
+            }
+
+            return (
+              <div key={fieldIndex} className="space-y-2">
+                <Label htmlFor={field.name}>
+                  {field.label}
+                  {field.required && <span className="text-red-500 ml-1">*</span>}
+                </Label>
+                {field.type === 'select' ? (
+                  <Select
+                    value={billingInformation[field.name]}
+                    onValueChange={(value) => handleBillingFieldChange(field.name, value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={field.placeholder || 'Select...'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {field.options?.map(option => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    id={field.name}
+                    name={field.name}
+                    type="text"
+                    value={billingInformation[field.name] || ''}
+                    onChange={(e) => {
+                      let value = e.target.value;
+                      // Auto-format based on field
+                      if (field.name === 'routing_number' || field.name === 'account_number') {
+                        value = value.replace(/\D/g, '');
+                        if (field.name === 'routing_number') {
+                          value = value.slice(0, 9);
+                        }
+                      } else if (field.name === 'card_number') {
+                        value = formatCardNumber(value);
+                      } else if (field.name === 'card_expiration') {
+                        value = formatCardExpiration(value);
+                      } else if (field.name === 'card_cvv') {
+                        value = formatCVV(value);
+                      }
+                      handleBillingFieldChange(field.name, value);
+                    }}
+                    placeholder={field.placeholder}
+                    maxLength={field.maxLength}
+                  />
+                )}
+                {field.helpText && (
+                  <p className="text-xs text-muted-foreground">{field.helpText}</p>
                 )}
               </div>
-            </CardContent>
-          </Card>
-        );
+            );
+          })}
+          
+          {isAccountVerified && (
+            <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+              <CheckSquare className="h-5 w-5 text-green-600" />
+              <span className="text-sm font-medium text-green-700">Payment method verified successfully</span>
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
 
       case 'chronic_conditions_selector':
         return (
@@ -1315,7 +1385,7 @@ export default function CallScript() {
         email_address: ''
       });
       setShowAddContact(false);
-    }else{
+    } else {
       console.log('Form data NOT reset')
     }
 
