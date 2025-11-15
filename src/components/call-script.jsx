@@ -51,6 +51,7 @@ import {
   Info
 } from 'lucide-react';
 import { ChargeDatePicker } from './charge-date-picker';
+import AddressAutoComplete from './address-autocomplete'; 
 
 import { toast } from 'sonner';
 
@@ -79,6 +80,17 @@ const CHRONIC_CONDITIONS = [
 
 const formatPhoneNumber = (value) => {
   const numbers = value.replace(/\D/g, '');
+  const char = { 0: '(', 3: ') ', 6: '-' };
+  let formatted = '';
+  for (let i = 0; i < numbers.length && i < 10; i++) {
+    formatted += (char[i] || '') + numbers[i];
+  }
+  return formatted;
+};
+
+const formatE164 = (value) => {
+  const cleaned = value.replace(/^\+1/, '');
+  const numbers = cleaned.replace(/\D/g, '');
   const char = { 0: '(', 3: ') ', 6: '-' };
   let formatted = '';
   for (let i = 0; i < numbers.length && i < 10; i++) {
@@ -580,7 +592,11 @@ useEffect(() => {
 
       switch (route) {
         case 'Customer':
-          return customerData?.[value] || '';
+          if(value === "primary_phone"){
+            return formatE164(customerData?.[value] || '');
+          }else{
+            return customerData?.[value] || '';
+          }
         case 'Billing':
           if (value === "charge_date") {
             return formatDate(billingInformation?.[value] || new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'America/New_York' }));
@@ -596,6 +612,13 @@ useEffect(() => {
       }
     });
   }, [customerData, billingInformation, dbUser]);
+
+  const handleAddressUpdate = (value) => {
+    console.log('Address update values: ', value);
+    const updatedData = { ...formData, ...value };
+    setFormData(updatedData);
+    debouncedUpdate({ data: updatedData });
+  }
 
   const renderContent = (content, index) => {
     const contentKey = `${content.type}-${index}`;
@@ -814,48 +837,10 @@ case 'billing_fields':
 
       case 'address_form':
         return (
-          <Card key={contentKey} className="border-l-4 border-l-indigo-500">
-            <CardContent>
-              <div className="space-y-4">
-                {content.fields?.map((field, fieldIndex) => (
-                  <div key={`${index}-address-field-${fieldIndex}`} className="space-y-2">
-                    <Label htmlFor={field.name}>
-                      {field.label}
-                      {field.required && <span className="text-red-500 ml-1">*</span>}
-                    </Label>
-                    {field.type === 'select' ? (
-                      <Select
-                        value={formData[field.name]}
-                        onValueChange={(value) => handleFieldChange(field.name, value)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select state" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {field.options?.map((option, optIndex) => (
-                            <SelectItem key={`${index}-address-option-${fieldIndex}-${optIndex}`} value={option}>
-                              {option}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <Input
-                        id={field.name}
-                        name={field.name}
-                        type={field.type}
-                        value={formData[field.name] || ''}
-                        onChange={(e) => handleFieldChange(field.name, e.target.value)}
-                        placeholder={field.placeholder}
-                        required={field.required}
-                        maxLength={field.maxLength}
-                      />
-                    )}
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+           <AddressAutoComplete
+                addressData={formData}
+                onAddressUpdate={(value) => handleAddressUpdate(value)}
+            />
         );
 
       case 'emergency_contacts_manager':
