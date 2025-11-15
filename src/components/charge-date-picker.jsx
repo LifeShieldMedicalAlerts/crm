@@ -12,19 +12,30 @@ import {
 
 export function ChargeDatePicker({ chargeDate, onDateChange }) {
   const [open, setOpen] = React.useState(false)
-  
+
   const parseLocalDate = (dateStr) => {
     if (!dateStr) return undefined
     const [year, month, day] = dateStr.split('-').map(Number)
     return new Date(year, month - 1, day)
   }
-  
+
   const formatLocalDate = (date) => {
     if (!date) return null
     const year = date.getFullYear()
     const month = String(date.getMonth() + 1).padStart(2, '0')
     const day = String(date.getDate()).padStart(2, '0')
     return `${year}-${month}-${day}`
+  }
+
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  const twoWeeksFromNow = new Date()
+  twoWeeksFromNow.setDate(twoWeeksFromNow.getDate() + 14)
+  twoWeeksFromNow.setHours(23, 59, 59, 999)
+
+  const disabledDates = (date) => {
+    return date < today || date > twoWeeksFromNow
   }
 
   return (
@@ -47,7 +58,9 @@ export function ChargeDatePicker({ chargeDate, onDateChange }) {
           <Calendar
             mode="single"
             selected={parseLocalDate(chargeDate)}
-            captionLayout="dropdown"
+            disabled={disabledDates}
+            fromDate={today}
+            toDate={twoWeeksFromNow}
             onSelect={(date) => {
               onDateChange(formatLocalDate(date))
               setOpen(false)
