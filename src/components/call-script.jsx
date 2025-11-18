@@ -144,7 +144,6 @@ export default function CallScript() {
   const [isSubscriptionCreated, setIsSubscriptionCreated] = useState(false);
   const [disclaimerAccepted, setDisclaimerAccepted] = useState(false);
   const prevCallRef = useRef(null);
-  const isBypassInformation = (str) => /^0+$/.test(str);
 
   // Usage:
   // formatDate('2025-11-11T05:00:00.000Z') → "November 11, 2025"
@@ -1648,7 +1647,7 @@ case 'billing_fields':
           <Button
             variant="outline"
             onClick={handlePrevious}
-            disabled={isFirstSlide}
+            disabled={isFirstSlide || isSubscriptionCreated}
           >
             <ChevronLeft className="h-4 w-4 mr-2" />
             Previous
