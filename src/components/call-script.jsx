@@ -1647,7 +1647,7 @@ case 'billing_fields':
           <Button
             variant="outline"
             onClick={handlePrevious}
-            disabled={isFirstSlide || isSubscriptionCreated}
+            disabled={isFirstSlide || isCreatingSubscription ||isSubscriptionCreated}
           >
             <ChevronLeft className="h-4 w-4 mr-2" />
             Previous
