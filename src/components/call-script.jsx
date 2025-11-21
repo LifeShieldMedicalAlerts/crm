@@ -449,6 +449,7 @@ useEffect(() => {
         toast.error('Failed to create subscription', {
           description: result?.data?.reason || 'Please try again.'
         });
+        setIsCreatingSubscription(false);
         return false;
       }
     } catch (error) {
