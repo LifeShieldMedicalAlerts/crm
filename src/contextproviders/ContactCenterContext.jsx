@@ -748,6 +748,7 @@ export function ContactCenterProvider({ children }) {
 
     const simpleUser = new Web.SimpleUser('wss://sip.lifeshieldmedicalalerts.com:9443', {
       aor: `sip:${dbUser.agent_id}@sip.lifeshieldmedicalalerts.com`,
+      keepAliveInterval: 15,
       media: {
         constraints: audioConstraints,
         remote: {
@@ -899,8 +900,13 @@ export function ContactCenterProvider({ children }) {
         console.log('Connected to SIP server');
         setSipState('connected');
       },
-      onServerDisconnect: () => {
-        console.log('Disconnected from SIP server');
+      onServerDisconnect: (error) => {
+        console.log('onServerDisconnect fired at:', new Date().toISOString());
+        if (error) {
+          console.log('Error:', error.message);
+        } else {
+          console.log('No error object (clean close or not provided)');
+        }
         setSipState('disconnected');
       }
     };
