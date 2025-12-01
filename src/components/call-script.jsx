@@ -232,7 +232,6 @@ useEffect(() => {
       setIsAccountVerified(false);
     }
     if (!hasSubAuth) {
-      setIsSubscriptionCreated(false);
       setDisclaimerAccepted(false);
     }
   }, [currentSlideIndex]);
