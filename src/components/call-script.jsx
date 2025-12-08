@@ -436,6 +436,7 @@ useEffect(() => {
         customerId: formData?.customer_id,
         frequency: billingInformation.frequency,
         charge_date: billingInformation.charge_date,
+        agentId: dbUser?.agent_id,
         action: "CREATE_SUBSCRIPTION"
       });
 
@@ -459,7 +460,7 @@ useEffect(() => {
       return false;
     }
 
-  }, [formData, billingInformation, paymentApi, currentQueueName]);
+  }, [formData, billingInformation, paymentApi, currentQueueName, dbUser]);
 
   // Check if current slide has billing fields
   const hasBillingFields = () => {
