@@ -191,7 +191,7 @@ export default function CallScript() {
   const [showAddContact, setShowAddContact] = useState(false);
 
   useEffect(() => {
-    if (hasAttemptedVerification === true && formData.have_consent === true) {
+    if (formData.have_consent === true) {
       setCanCallBack(true);
     } else {
       setCanCallBack(false);
