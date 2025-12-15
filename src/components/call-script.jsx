@@ -51,7 +51,8 @@ import {
   Info
 } from 'lucide-react';
 import { ChargeDatePicker } from './charge-date-picker';
-import AddressAutoComplete from './address-autocomplete'; 
+import AddressAutoComplete from './address-autocomplete';
+import BillingAddressManager from './billing_address_manager';
 
 import { toast } from 'sonner';
 
@@ -179,7 +180,13 @@ export default function CallScript() {
     selected_product: '',
     charge_date: new Date().toISOString().split('T')[0],
     frequency: 'Monthly',
-    charge_amount: '$49.99'
+    charge_amount: '$49.99',
+    different_billing_address: false,
+    billing_street_address_one: '',
+    billing_street_address_two: '',
+    billing_address_city: '',
+    billing_address_state: '',
+    billing_address_zip: ''
   });
 
   const [newEmergencyContact, setNewEmergencyContact] = useState({
@@ -198,16 +205,16 @@ export default function CallScript() {
     }
   }, [hasAttemptedVerification, formData])
 
-useEffect(() => {
-  setBillingInformation((prev) => ({
-    ...prev,
-    routing_number: '',
-    account_number: '',
-    card_number: '',
-    card_expiration: '',
-    card_cvv: '',
-  }))
-}, [billingInformation.type])
+  useEffect(() => {
+    setBillingInformation((prev) => ({
+      ...prev,
+      routing_number: '',
+      account_number: '',
+      card_number: '',
+      card_expiration: '',
+      card_cvv: '',
+    }))
+  }, [billingInformation.type])
 
   // Sync customerData to local formData
   useEffect(() => {
@@ -265,6 +272,11 @@ useEffect(() => {
     // Reset verification when billing info changes
     setIsAccountVerified(false);
   }, [productOfferings]);
+
+  const handleBillingAddressChange = useCallback((name, value) => {
+    setBillingInformation(prev => ({ ...prev, [name]: value }));
+    setIsAccountVerified(false);
+  }, [billingInformation, formData]);
 
   const handleCheckboxChange = (name, checked) => {
     const updatedData = {
@@ -339,7 +351,6 @@ useEffect(() => {
   const verifyAccountInformation = useCallback(async () => {
     const currentMedium = billingInformation.type === 'checking' || billingInformation.type === 'savings' ? 'ach' : 'card';
 
-    // Validate based on payment medium
     if (currentMedium === 'ach') {
       if (!billingInformation.routing_number || !billingInformation.account_number) {
         toast.error('Invalid billing information. Please enter both routing and account number.');
@@ -378,14 +389,32 @@ useEffect(() => {
       }
     }
 
-    setHasAttemptedVerification(true);
+    if (billingInformation.different_billing_address) {
+      if (!billingInformation.billing_street_address_one) {
+        toast.error('Please enter a billing street address.');
+        return false;
+      }
+      if (!billingInformation.billing_address_city) {
+        toast.error('Please enter a billing city.');
+        return false;
+      }
+      if (!billingInformation.billing_address_state) {
+        toast.error('Please select a billing state.');
+        return false;
+      }
+      if (!billingInformation.billing_address_zip || billingInformation.billing_address_zip.length !== 5) {
+        toast.error('Please enter a valid 5-digit billing ZIP code.');
+        return false;
+      }
+    }
 
+    setHasAttemptedVerification(true);
     setIsVerifying(true);
 
-    // Training queue
+    // Training queue so just ignore
     if (currentQueueName && currentQueueName === 'training@sip.lifeshieldmedicalalerts.com') {
       await new Promise(resolve => setTimeout(resolve, 4000));
-      const success = Math.random() < 0.8; // 80% chance of success
+      const success = Math.random() < 0.8;
       setIsVerifying(false);
 
       if (success) {
@@ -400,7 +429,6 @@ useEffect(() => {
       }
     }
 
-    //Real stuff
     const verificationResult = await paymentApi.execute('/billing/verifyaccount', 'POST', {
       customer_id: formData?.customer_id,
       payment_information: billingInformation,
@@ -508,7 +536,7 @@ useEffect(() => {
           if (field.medium && field.medium !== currentMedium) {
             continue;
           }
-          
+
           if (field.required) {
             const value = billingInformation[field.name];
             if (!value || (typeof value === 'string' && value.trim() === '')) {
@@ -526,6 +554,14 @@ useEffect(() => {
       if (content.type === 'subscription_authorization' && content.required) {
         if (!disclaimerAccepted) {
           return false;
+        }
+      }
+      if (content.type === 'billing_address_manager') {
+        if (billingInformation.different_billing_address) {
+          if (!billingInformation.billing_street_address_one?.trim()) return false;
+          if (!billingInformation.billing_address_city?.trim()) return false;
+          if (!billingInformation.billing_address_state?.trim()) return false;
+          if (!billingInformation.billing_address_zip?.trim() || billingInformation.billing_address_zip.length !== 5) return false;
         }
       }
     }
@@ -592,9 +628,9 @@ useEffect(() => {
 
       switch (route) {
         case 'Customer':
-          if(value === "primary_phone"){
+          if (value === "primary_phone") {
             return formatE164(customerData?.[value] || '');
-          }else{
+          } else {
             return customerData?.[value] || '';
           }
         case 'Billing':
@@ -696,91 +732,99 @@ useEffect(() => {
           </Card>
         );
 
-case 'billing_fields':
-  // Determine current payment medium
-  const typeField = content.fields?.find(f => f.name === 'type');
-  const selectedOption = typeField?.options?.find(
-    opt => opt.value === billingInformation.type
-  );
-  const currentMedium = selectedOption?.medium;
+      case 'billing_fields':
+        // Determine current payment medium
+        const typeField = content.fields?.find(f => f.name === 'type');
+        const selectedOption = typeField?.options?.find(
+          opt => opt.value === billingInformation.type
+        );
+        const currentMedium = selectedOption?.medium;
 
-  return (
-    <Card key={index} className="border-l-4 border-l-emerald-500">
-      <CardContent>
-        <div className="space-y-4">
-          {content.fields?.map((field, fieldIndex) => {
-            // Skip fields that don't match current medium
-            if (field.medium && field.medium !== currentMedium) {
-              return null;
-            }
+        return (
+          <Card key={index} className="border-l-4 border-l-emerald-500">
+            <CardContent>
+              <div className="space-y-4">
+                {content.fields?.map((field, fieldIndex) => {
+                  // Skip fields that don't match current medium
+                  if (field.medium && field.medium !== currentMedium) {
+                    return null;
+                  }
 
-            return (
-              <div key={fieldIndex} className="space-y-2">
-                <Label htmlFor={field.name}>
-                  {field.label}
-                  {field.required && <span className="text-red-500 ml-1">*</span>}
-                </Label>
-                {field.type === 'select' ? (
-                  <Select
-                    value={billingInformation[field.name]}
-                    onValueChange={(value) => handleBillingFieldChange(field.name, value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={field.placeholder || 'Select...'} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {field.options?.map(option => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <Input
-                    id={field.name}
-                    name={field.name}
-                    type="text"
-                    value={billingInformation[field.name] || ''}
-                    onChange={(e) => {
-                      let value = e.target.value;
-                      // Auto-format based on field
-                      if (field.name === 'routing_number' || field.name === 'account_number') {
-                        value = value.replace(/\D/g, '');
-                        if (field.name === 'routing_number') {
-                          value = value.slice(0, 9);
-                        }
-                      } else if (field.name === 'card_number') {
-                        value = formatCardNumber(value);
-                      } else if (field.name === 'card_expiration') {
-                        value = formatCardExpiration(value);
-                      } else if (field.name === 'card_cvv') {
-                        value = formatCVV(value);
-                      }
-                      handleBillingFieldChange(field.name, value);
-                    }}
-                    placeholder={field.placeholder}
-                    maxLength={field.maxLength}
-                  />
-                )}
-                {field.helpText && (
-                  <p className="text-xs text-muted-foreground">{field.helpText}</p>
+                  return (
+                    <div key={fieldIndex} className="space-y-2">
+                      <Label htmlFor={field.name}>
+                        {field.label}
+                        {field.required && <span className="text-red-500 ml-1">*</span>}
+                      </Label>
+                      {field.type === 'select' ? (
+                        <Select
+                          value={billingInformation[field.name]}
+                          onValueChange={(value) => handleBillingFieldChange(field.name, value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder={field.placeholder || 'Select...'} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {field.options?.map(option => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Input
+                          id={field.name}
+                          name={field.name}
+                          type="text"
+                          value={billingInformation[field.name] || ''}
+                          onChange={(e) => {
+                            let value = e.target.value;
+                            // Auto-format based on field
+                            if (field.name === 'routing_number' || field.name === 'account_number') {
+                              value = value.replace(/\D/g, '');
+                              if (field.name === 'routing_number') {
+                                value = value.slice(0, 9);
+                              }
+                            } else if (field.name === 'card_number') {
+                              value = formatCardNumber(value);
+                            } else if (field.name === 'card_expiration') {
+                              value = formatCardExpiration(value);
+                            } else if (field.name === 'card_cvv') {
+                              value = formatCVV(value);
+                            }
+                            handleBillingFieldChange(field.name, value);
+                          }}
+                          placeholder={field.placeholder}
+                          maxLength={field.maxLength}
+                        />
+                      )}
+                      {field.helpText && (
+                        <p className="text-xs text-muted-foreground">{field.helpText}</p>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {isAccountVerified && (
+                  <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                    <CheckSquare className="h-5 w-5 text-green-600" />
+                    <span className="text-sm font-medium text-green-700">Payment method verified successfully</span>
+                  </div>
                 )}
               </div>
-            );
-          })}
-          
-          {isAccountVerified && (
-            <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
-              <CheckSquare className="h-5 w-5 text-green-600" />
-              <span className="text-sm font-medium text-green-700">Payment method verified successfully</span>
-            </div>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  );
-
+            </CardContent>
+          </Card>
+        );
+      case 'billing_address_manager':
+        return (
+          <BillingAddressManager
+            key={contentKey}
+            billingInfo={billingInformation}
+            customerInfo={formData}
+            onDataChange={handleBillingAddressChange}
+          />
+        );
       case 'chronic_conditions_selector':
         return (
           <Card key={contentKey} className="border-l-4 border-l-teal-500">
@@ -837,10 +881,10 @@ case 'billing_fields':
 
       case 'address_form':
         return (
-           <AddressAutoComplete
-                addressData={formData}
-                onAddressUpdate={(value) => handleAddressUpdate(value)}
-            />
+          <AddressAutoComplete
+            addressData={formData}
+            onAddressUpdate={(value) => handleAddressUpdate(value)}
+          />
         );
 
       case 'emergency_contacts_manager':
@@ -1360,7 +1404,13 @@ case 'billing_fields':
           const day = String(now.getDate()).padStart(2, '0')
           return `${year}-${month}-${day}`
         })(),
-        charge_amount: '$49.99'
+        charge_amount: '$49.99',
+        different_billing_address: false,
+        billing_street_address_one: '',
+        billing_street_address_two: '',
+        billing_address_city: '',
+        billing_address_state: '',
+        billing_address_zip: ''
       });
       setFormData({
         first_name: '',
@@ -1648,7 +1698,7 @@ case 'billing_fields':
           <Button
             variant="outline"
             onClick={handlePrevious}
-            disabled={isFirstSlide || isCreatingSubscription ||isSubscriptionCreated}
+            disabled={isFirstSlide || isCreatingSubscription || isSubscriptionCreated}
           >
             <ChevronLeft className="h-4 w-4 mr-2" />
             Previous
