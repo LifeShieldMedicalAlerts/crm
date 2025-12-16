@@ -193,7 +193,9 @@ export default function CallScript() {
     first_name: '',
     last_name: '',
     phone_number: '',
-    email_address: ''
+    email_address: '',
+    contact_type: '1',
+    relation: '0'
   });
   const [showAddContact, setShowAddContact] = useState(false);
 
@@ -951,6 +953,73 @@ export default function CallScript() {
                       />
                     </div>
                   </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="new_contact_type">Contact Type</Label>
+                      <Select
+                        value={newEmergencyContact.contact_type}
+                        onValueChange={(value) => setNewEmergencyContact(prev => ({ ...prev, contact_type: value }))}
+                      >
+                        <SelectTrigger id="new_contact_type" className="w-full">
+                          <SelectValue placeholder="Select Type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1">Responder</SelectItem>
+                          <SelectItem value="2">Notifier</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="new_contact_relation">Contact Relation</Label>
+                      <Select
+                        value={newEmergencyContact.relation}
+                        onValueChange={(value) => setNewEmergencyContact(prev => ({ ...prev, relation: value }))}
+                      >
+                        <SelectTrigger id="new_contact_relation" className="w-full">
+                          <SelectValue placeholder="Select Relation" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="0">None</SelectItem>
+                          <SelectItem value="1">Child</SelectItem>
+                          <SelectItem value="2">Friend</SelectItem>
+                          <SelectItem value="3">Grandchild</SelectItem>
+                          <SelectItem value="4">Neighbor</SelectItem>
+                          <SelectItem value="5">Spouse</SelectItem>
+                          <SelectItem value="6">Aunt</SelectItem>
+                          <SelectItem value="7">Brother-in-Law</SelectItem>
+                          <SelectItem value="8">Building Manager</SelectItem>
+                          <SelectItem value="9">Caretaker</SelectItem>
+                          <SelectItem value="10">Cleaning Service</SelectItem>
+                          <SelectItem value="11">Clergy</SelectItem>
+                          <SelectItem value="12">Cousin</SelectItem>
+                          <SelectItem value="13">Daughter-in-Law</SelectItem>
+                          <SelectItem value="14">Doctor</SelectItem>
+                          <SelectItem value="15">Employee</SelectItem>
+                          <SelectItem value="16">Ex-Spouse</SelectItem>
+                          <SelectItem value="17">Father</SelectItem>
+                          <SelectItem value="18">Front Desk</SelectItem>
+                          <SelectItem value="19">Hospice</SelectItem>
+                          <SelectItem value="20">Lawyer</SelectItem>
+                          <SelectItem value="21">Manager</SelectItem>
+                          <SelectItem value="22">Mother</SelectItem>
+                          <SelectItem value="23">Niece/Nephew</SelectItem>
+                          <SelectItem value="24">Facility Owner</SelectItem>
+                          <SelectItem value="25">Parent</SelectItem>
+                          <SelectItem value="26">Partner</SelectItem>
+                          <SelectItem value="27">Power of Attorney</SelectItem>
+                          <SelectItem value="28">Runner</SelectItem>
+                          <SelectItem value="29">Sibling</SelectItem>
+                          <SelectItem value="30">Sister-in-Law</SelectItem>
+                          <SelectItem value="31">Son-in-Law</SelectItem>
+                          <SelectItem value="32">Step Relative</SelectItem>
+                          <SelectItem value="33">Technician</SelectItem>
+                          <SelectItem value="34">Uncle</SelectItem>
+                          <SelectItem value="35">Caseworker</SelectItem>
+                          <SelectItem value="36">Private Ambulance</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
                   <div className="flex justify-end gap-2">
                     <Button
                       type="button"
@@ -958,7 +1027,7 @@ export default function CallScript() {
                       size="sm"
                       onClick={() => {
                         setShowAddContact(false);
-                        setNewEmergencyContact({ first_name: '', last_name: '', phone_number: '', email_address: '' });
+                        setNewEmergencyContact({ first_name: '', last_name: '', phone_number: '', email_address: '', contact_type: '', relation: '' });
                       }}
                     >
                       Cancel
@@ -967,7 +1036,7 @@ export default function CallScript() {
                       type="button"
                       size="sm"
                       onClick={handleAddEmergencyContact}
-                      disabled={!newEmergencyContact.first_name || !newEmergencyContact.last_name}
+                      disabled={!newEmergencyContact.first_name || !newEmergencyContact.last_name || (!newEmergencyContact.phone_number && !newEmergencyContact.email_address)}
                     >
                       Add
                     </Button>
@@ -1435,7 +1504,9 @@ export default function CallScript() {
         first_name: '',
         last_name: '',
         phone_number: '',
-        email_address: ''
+        email_address: '',
+        contact_type: '',
+        relation: ''
       });
       setShowAddContact(false);
     } else {
@@ -1601,6 +1672,28 @@ export default function CallScript() {
                           Last: {new Date(formData.last_consent).toLocaleDateString()}
                         </p>
                       )}
+                    </div>
+                  </>
+                )}
+                {formData?.preferred_device && (
+                  <>
+                    <Separator />
+                    <div className="space-y-2">
+                      <h4 className="font-medium text-sm text-muted-foreground uppercase">Preferred Device</h4>
+                      <div className="space-y-2">
+                      <Select
+                        value={formData.preferred_device}
+                        onValueChange={(value) => handleFieldChange('preferred_device', value)}
+                      >
+                        <SelectTrigger id="customer_preferred_device" className="w-full">
+                          <SelectValue placeholder="Select Device" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="P">Pendant</SelectItem>
+                          <SelectItem value="W">Watch</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                     </div>
                   </>
                 )}
